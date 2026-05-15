@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>RAG 文件上传测试</title>
+</head>
+<body>
+
+<h2>上传文件到 RAG (MinIO)</h2>
+
+<input type="file" id="fileInput">
+<br><br>
+<button onclick="uploadFile()">上传</button>
+
+<p id="result"></p>
+
+<script>
+    function uploadFile() {
+        const fileInput = document.getElementById("fileInput");
+        const file = fileInput.files[0];
+
+        if (!file) {
+            alert("请选择文件");
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        fetch("http://localhost:8080/rag/ingest", {
+            method: "POST",
+            body: formData
+        })
+            .then(response => {
+                if (response.ok) {
+                    document.getElementById("result").innerText = "上传成功！";
+                } else {
+                    document.getElementById("result").innerText = "上传失败：" + response.status;
+                }
+            })
+            .catch(error => {
+                document.getElementById("result").innerText = "请求错误：" + error;
+            });
+    }
+</script>
+
+</body>
+</html>

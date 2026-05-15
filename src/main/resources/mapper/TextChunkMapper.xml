@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.library.agent.mapper.TextChunkMapper">
+
+    <insert id="batchInsert">
+        INSERT INTO text_chunk (
+        file_id,
+        chunk_index,
+        chunk_text,
+        chunk_length,
+        start_offset,
+        end_offset,
+        status,
+        created_at,
+        updated_at
+        )
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (
+            #{item.fileId},
+            #{item.chunkIndex},
+            #{item.chunkText},
+            #{item.chunkLength},
+            #{item.startOffset},
+            #{item.endOffset},
+            #{item.status},
+            #{item.createdAt},
+            #{item.updatedAt}
+            )
+        </foreach>
+    </insert>
+
+</mapper>
