@@ -27,7 +27,7 @@
         const formData = new FormData();
         formData.append("file", file);
 
-        fetch("http://localhost:8080/rag/ingest", {
+        fetch("http://localhost:8088/rag/ingest", {
             method: "POST",
             body: formData
         })
