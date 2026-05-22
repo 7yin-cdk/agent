@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.library.agent.mapper.AgentShortTermMemoryMapper">
+
+    <resultMap id="AgentShortTermMemoryResultMap"
+               type="com.library.agent.entity.AgentShortTermMemory">
+        <id property="id" column="id"/>
+        <result property="userId" column="user_id"/>
+        <result property="conversationId" column="conversation_id"/>
+        <result property="role" column="role"/>
+        <result property="content" column="content"/>
+        <result property="tokenCount" column="token_count"/>
+        <result property="messageOrder" column="message_order"/>
+        <result property="metadata" column="metadata"
+                typeHandler="com.library.agent.handler.JsonbTypeHandler"/>
+        <result property="deleted" column="is_deleted"/>
+        <result property="expiredAt" column="expired_at"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <insert id="insert"
+            parameterType="com.library.agent.entity.AgentShortTermMemory"
+            useGeneratedKeys="true"
+            keyProperty="id">
+        INSERT INTO agent_short_term_memory
+        (
+            user_id,
+            conversation_id,
+            role,
+            content,
+            token_count,
+            message_order,
+            metadata,
+            is_deleted,
+            expired_at,
+            created_at,
+            updated_at
+        )
+        VALUES
+            (
+                #{userId},
+                #{conversationId},
+                #{role},
+                #{content},
+                COALESCE(#{tokenCount}, 0),
+                #{messageOrder},
+                COALESCE(#{metadata, jdbcType=OTHER, typeHandler=com.library.agent.handler.JsonbTypeHandler}, '{}'::jsonb),
+                COALESCE(#{deleted}, FALSE),
+                #{expiredAt},
+                COALESCE(#{createdAt}, CURRENT_TIMESTAMP),
+                COALESCE(#{updatedAt}, CURRENT_TIMESTAMP)
+            )
+    </insert>
+
+    <select id="selectById" resultMap="AgentShortTermMemoryResultMap">
+        SELECT
+            id,
+            user_id,
+            conversation_id,
+            role,
+            content,
+            token_count,
+            message_order,
+            metadata,
+            is_deleted,
+            expired_at,
+            created_at,
+            updated_at
+        FROM agent_short_term_memory
+        WHERE id = #{id}
+          AND is_deleted = FALSE
+    </select>
+
+    <select id="selectRecentMessages" resultMap="AgentShortTermMemoryResultMap">
+        SELECT *
+        FROM (
+                 SELECT
+                     id,
+                     user_id,
+                     conversation_id,
+                     role,
+                     content,
+                     token_count,
+                     message_order,
+                     metadata,
+                     is_deleted,
+                     expired_at,
+                     created_at,
+                     updated_at
+                 FROM agent_short_term_memory
+                 WHERE user_id = #{userId}
+                   AND conversation_id = #{conversationId}
+                   AND is_deleted = FALSE
+                   AND (expired_at IS NULL OR expired_at > CURRENT_TIMESTAMP)
+                 ORDER BY message_order DESC
+                     LIMIT #{limit}
+             ) t
+        ORDER BY t.message_order ASC
+    </select>
+
+    <select id="selectNextMessageOrder" resultType="java.lang.Long">
+        SELECT COALESCE(MAX(message_order), 0) + 1
+        FROM agent_short_term_memory
+        WHERE user_id = #{userId}
+          AND conversation_id = #{conversationId}
+    </select>
+
+    <update id="logicalDeleteByConversation">
+        UPDATE agent_short_term_memory
+        SET is_deleted = TRUE,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = #{userId}
+          AND conversation_id = #{conversationId}
+          AND is_deleted = FALSE
+    </update>
+
+    <delete id="deleteExpired">
+        DELETE FROM agent_short_term_memory
+        WHERE expired_at IS NOT NULL
+        AND expired_at &lt;= CURRENT_TIMESTAMP
+    </delete>
+
+</mapper>

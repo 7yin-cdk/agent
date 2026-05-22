@@ -1,48 +1,1153 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>RAG 文件上传测试</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Console</title>
+    <style>
+        :root {
+            --bg: #f6f7fb;
+            --surface: #ffffff;
+            --surface-soft: #f1f5f9;
+            --line: #d8dee8;
+            --text: #1f2937;
+            --muted: #64748b;
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --success: #0f766e;
+            --danger: #dc2626;
+            --warning: #b45309;
+            --shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+            color: var(--text);
+            background: var(--bg);
+        }
+
+        button,
+        input,
+        textarea {
+            font: inherit;
+        }
+
+        button {
+            border: 0;
+            border-radius: 6px;
+            padding: 10px 14px;
+            color: #ffffff;
+            background: var(--primary);
+            cursor: pointer;
+            transition: background 0.16s ease, transform 0.16s ease;
+        }
+
+        button:hover {
+            background: var(--primary-dark);
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
+        button:disabled {
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        button.secondary {
+            color: var(--text);
+            background: var(--surface-soft);
+            border: 1px solid var(--line);
+        }
+
+        button.secondary:hover {
+            background: #e2e8f0;
+        }
+
+        button.danger {
+            background: var(--danger);
+        }
+
+        button.danger:hover {
+            background: #b91c1c;
+        }
+
+        button.compact {
+            padding: 7px 10px;
+            font-size: 13px;
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            padding: 10px 12px;
+            color: var(--text);
+            background: #ffffff;
+            outline: none;
+        }
+
+        textarea {
+            min-height: 108px;
+            line-height: 1.6;
+            resize: vertical;
+        }
+
+        input:focus,
+        textarea:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+        }
+
+        .app-shell {
+            width: min(1240px, calc(100% - 32px));
+            margin: 0 auto;
+            padding: 28px 0 40px;
+        }
+
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 22px;
+        }
+
+        .brand h1 {
+            margin: 0;
+            font-size: 24px;
+            line-height: 1.2;
+        }
+
+        .brand p {
+            margin: 6px 0 0;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .user-chip {
+            display: none;
+            align-items: center;
+            gap: 12px;
+            padding: 8px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: var(--surface);
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+        }
+
+        .user-chip.active {
+            display: flex;
+        }
+
+        .avatar {
+            display: grid;
+            place-items: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            color: #ffffff;
+            background: var(--success);
+            font-weight: 700;
+        }
+
+        .user-meta {
+            min-width: 140px;
+        }
+
+        .user-name {
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .user-sub {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 18px;
+            align-items: start;
+        }
+
+        .side-stack {
+            display: grid;
+            gap: 18px;
+        }
+
+        .panel {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: var(--surface);
+            box-shadow: var(--shadow);
+        }
+
+        .panel-header {
+            padding: 18px 18px 0;
+        }
+
+        .panel-header h2 {
+            margin: 0;
+            font-size: 18px;
+        }
+
+        .panel-header p {
+            margin: 6px 0 0;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .panel-body {
+            padding: 18px;
+        }
+
+        .auth-tabs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            padding: 4px;
+            margin-bottom: 18px;
+            border-radius: 8px;
+            background: var(--surface-soft);
+        }
+
+        .auth-tabs button {
+            color: var(--muted);
+            background: transparent;
+        }
+
+        .auth-tabs button.active {
+            color: var(--text);
+            background: #ffffff;
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+        }
+
+        .field {
+            display: grid;
+            gap: 7px;
+            margin-bottom: 14px;
+        }
+
+        .field label {
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .workspace {
+            display: none;
+            grid-template-columns: 300px 1fr;
+            gap: 18px;
+            align-items: start;
+        }
+
+        .workspace.active {
+            display: grid;
+        }
+
+        .conversation-list {
+            display: grid;
+            gap: 8px;
+            max-height: 480px;
+            overflow: auto;
+            padding-right: 2px;
+        }
+
+        .conversation-item {
+            display: grid;
+            gap: 5px;
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #ffffff;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .conversation-item:hover {
+            border-color: #9ab6f6;
+            background: #f8fbff;
+        }
+
+        .conversation-item.active {
+            border-color: var(--primary);
+            background: #eff6ff;
+        }
+
+        .conversation-title {
+            overflow: hidden;
+            font-weight: 700;
+            font-size: 14px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .conversation-meta {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .chat-panel {
+            min-width: 0;
+        }
+
+        .chat-heading {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 18px 18px 0;
+        }
+
+        .chat-heading h2 {
+            margin: 0;
+            font-size: 18px;
+        }
+
+        .chat-heading p {
+            margin: 6px 0 0;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .chat-log {
+            display: grid;
+            gap: 12px;
+            min-height: 310px;
+            max-height: 520px;
+            overflow: auto;
+            padding: 14px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #fbfdff;
+        }
+
+        .message {
+            display: grid;
+            gap: 5px;
+            max-width: 92%;
+            padding: 10px 12px;
+            border-radius: 8px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .message.user {
+            justify-self: end;
+            color: #ffffff;
+            background: var(--primary);
+        }
+
+        .message.assistant {
+            justify-self: start;
+            border: 1px solid var(--line);
+            background: #ffffff;
+        }
+
+        .message .role {
+            font-size: 12px;
+            opacity: 0.76;
+        }
+
+        .tool-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+            margin-top: 18px;
+        }
+
+        .upload-box {
+            display: grid;
+            gap: 12px;
+            padding: 16px;
+            border: 1px dashed #94a3b8;
+            border-radius: 8px;
+            background: #fbfdff;
+        }
+
+        .status {
+            min-height: 22px;
+            margin-top: 14px;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.5;
+            word-break: break-word;
+        }
+
+        .status.ok {
+            color: var(--success);
+        }
+
+        .status.error {
+            color: var(--danger);
+        }
+
+        .status.warning {
+            color: var(--warning);
+        }
+
+        .token-box {
+            display: none;
+            margin-top: 14px;
+            padding: 12px;
+            border-radius: 8px;
+            color: #dbeafe;
+            background: #0f172a;
+            font-family: Consolas, monospace;
+            font-size: 12px;
+            line-height: 1.5;
+            word-break: break-all;
+        }
+
+        .token-box.active {
+            display: block;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        @media (max-width: 1040px) {
+            .layout,
+            .workspace,
+            .tool-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 720px) {
+            .topbar,
+            .chat-heading {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .user-chip.active {
+                width: 100%;
+                justify-content: space-between;
+            }
+        }
+    </style>
 </head>
 <body>
+<main class="app-shell">
+    <header class="topbar">
+        <div class="brand">
+            <h1>Agent 控制台</h1>
+            <p>登录后可以创建多个会话，聊天请求会自动携带当前会话 ID 和 Bearer Token。</p>
+        </div>
+        <div id="userChip" class="user-chip">
+            <div class="avatar" id="avatarText">U</div>
+            <div class="user-meta">
+                <div class="user-name" id="currentNickname">未登录</div>
+                <div class="user-sub" id="currentUsername">-</div>
+            </div>
+            <button class="danger compact" id="logoutButton">退出</button>
+        </div>
+    </header>
 
-<h2>上传文件到 RAG (MinIO)</h2>
+    <section class="layout">
+        <aside class="side-stack">
+            <section class="panel">
+                <div class="panel-header">
+                    <h2>账号</h2>
+                    <p>注册成功后会自动登录，令牌保存到浏览器 localStorage。</p>
+                </div>
+                <div class="panel-body">
+                    <div class="auth-tabs">
+                        <button id="loginTab" class="active" type="button">登录</button>
+                        <button id="registerTab" type="button">注册</button>
+                    </div>
 
-<input type="file" id="fileInput">
-<br><br>
-<button onclick="uploadFile()">上传</button>
+                    <form id="authForm">
+                        <div class="field">
+                            <label for="usernameInput">用户名</label>
+                            <input id="usernameInput" autocomplete="username" placeholder="请输入用户名">
+                        </div>
+                        <div class="field">
+                            <label for="passwordInput">密码</label>
+                            <input id="passwordInput" type="password" autocomplete="current-password" placeholder="请输入密码">
+                        </div>
+                        <div id="nicknameField" class="field hidden">
+                            <label for="nicknameInput">昵称</label>
+                            <input id="nicknameInput" placeholder="不填则使用用户名">
+                        </div>
+                        <div class="actions">
+                            <button id="authSubmitButton" type="submit">登录</button>
+                            <button class="secondary" id="showTokenButton" type="button">查看令牌</button>
+                        </div>
+                    </form>
 
-<p id="result"></p>
+                    <div id="authStatus" class="status"></div>
+                    <div id="tokenBox" class="token-box"></div>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h2>当前用户</h2>
+                    <p>当前接口：GET /auth/me</p>
+                </div>
+                <div class="panel-body">
+                    <button id="refreshMeButton" type="button">刷新用户上下文</button>
+                    <div id="meStatus" class="status"></div>
+                </div>
+            </section>
+        </aside>
+
+        <section id="workspace" class="workspace">
+            <aside class="panel">
+                <div class="panel-header">
+                    <h2>会话</h2>
+                    <p>当前接口：/agent/conversations</p>
+                </div>
+                <div class="panel-body">
+                    <div class="actions">
+                        <button id="newConversationButton" type="button">新建会话</button>
+                        <button class="secondary" id="refreshConversationsButton" type="button">刷新</button>
+                    </div>
+                    <div id="conversationStatus" class="status"></div>
+                    <div id="conversationList" class="conversation-list"></div>
+                </div>
+            </aside>
+
+            <section>
+                <div class="panel chat-panel">
+                    <div class="chat-heading">
+                        <div>
+                            <h2 id="activeConversationTitle">未选择会话</h2>
+                            <p id="activeConversationMeta">发送第一条消息时，后端会自动创建会话。</p>
+                        </div>
+                        <div class="actions">
+                            <button class="secondary compact" id="renameConversationButton" type="button">改名</button>
+                            <button class="danger compact" id="deleteConversationButton" type="button">删除</button>
+                        </div>
+                    </div>
+                    <div class="panel-body">
+                        <div id="chatLog" class="chat-log"></div>
+                        <div class="field" style="margin-top: 14px;">
+                            <label for="chatInput">问题</label>
+                            <textarea id="chatInput" placeholder="输入你想问 Agent 的问题"></textarea>
+                        </div>
+                        <div class="actions">
+                            <button id="sendChatButton" type="button">发送</button>
+                            <button id="clearChatButton" class="secondary" type="button">清空显示</button>
+                        </div>
+                        <div id="chatStatus" class="status"></div>
+                    </div>
+                </div>
+
+                <div class="tool-grid">
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h2>RAG 上传</h2>
+                            <p>当前接口：POST /rag/ingest</p>
+                        </div>
+                        <div class="panel-body">
+                            <div class="upload-box">
+                                <input id="fileInput" type="file">
+                                <button id="uploadButton" type="button">上传文件</button>
+                            </div>
+                            <div id="uploadStatus" class="status"></div>
+                        </div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h2>接口状态</h2>
+                            <p>聊天响应会返回本次所属 conversationId。</p>
+                        </div>
+                        <div class="panel-body">
+                            <div id="apiStatus" class="status">等待请求。</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </section>
+    </section>
+</main>
 
 <script>
-    function uploadFile() {
-        const fileInput = document.getElementById("fileInput");
-        const file = fileInput.files[0];
+    const API_BASE = window.location.origin.includes("8088") ? "" : "http://localhost:8088";
+    const TOKEN_KEY = "agent_auth_token";
+    const USER_KEY = "agent_user_info";
+    const CONVERSATION_KEY = "agent_current_conversation_id";
+    const LOCAL_MESSAGES_KEY = "agent_local_messages";
 
+    const state = {
+        mode: "login",
+        token: localStorage.getItem(TOKEN_KEY) || "",
+        user: readJson(localStorage.getItem(USER_KEY)),
+        conversations: [],
+        currentConversationId: localStorage.getItem(CONVERSATION_KEY) || "",
+        localMessages: readJson(localStorage.getItem(LOCAL_MESSAGES_KEY)) || {}
+    };
+
+    const elements = {
+        userChip: document.getElementById("userChip"),
+        avatarText: document.getElementById("avatarText"),
+        currentNickname: document.getElementById("currentNickname"),
+        currentUsername: document.getElementById("currentUsername"),
+        logoutButton: document.getElementById("logoutButton"),
+        loginTab: document.getElementById("loginTab"),
+        registerTab: document.getElementById("registerTab"),
+        authForm: document.getElementById("authForm"),
+        usernameInput: document.getElementById("usernameInput"),
+        passwordInput: document.getElementById("passwordInput"),
+        nicknameField: document.getElementById("nicknameField"),
+        nicknameInput: document.getElementById("nicknameInput"),
+        authSubmitButton: document.getElementById("authSubmitButton"),
+        showTokenButton: document.getElementById("showTokenButton"),
+        authStatus: document.getElementById("authStatus"),
+        tokenBox: document.getElementById("tokenBox"),
+        workspace: document.getElementById("workspace"),
+        refreshMeButton: document.getElementById("refreshMeButton"),
+        meStatus: document.getElementById("meStatus"),
+        newConversationButton: document.getElementById("newConversationButton"),
+        refreshConversationsButton: document.getElementById("refreshConversationsButton"),
+        conversationStatus: document.getElementById("conversationStatus"),
+        conversationList: document.getElementById("conversationList"),
+        activeConversationTitle: document.getElementById("activeConversationTitle"),
+        activeConversationMeta: document.getElementById("activeConversationMeta"),
+        renameConversationButton: document.getElementById("renameConversationButton"),
+        deleteConversationButton: document.getElementById("deleteConversationButton"),
+        chatLog: document.getElementById("chatLog"),
+        chatInput: document.getElementById("chatInput"),
+        sendChatButton: document.getElementById("sendChatButton"),
+        clearChatButton: document.getElementById("clearChatButton"),
+        chatStatus: document.getElementById("chatStatus"),
+        fileInput: document.getElementById("fileInput"),
+        uploadButton: document.getElementById("uploadButton"),
+        uploadStatus: document.getElementById("uploadStatus"),
+        apiStatus: document.getElementById("apiStatus")
+    };
+
+    elements.loginTab.addEventListener("click", () => switchMode("login"));
+    elements.registerTab.addEventListener("click", () => switchMode("register"));
+    elements.authForm.addEventListener("submit", handleAuthSubmit);
+    elements.logoutButton.addEventListener("click", logout);
+    elements.showTokenButton.addEventListener("click", toggleToken);
+    elements.refreshMeButton.addEventListener("click", refreshMe);
+    elements.newConversationButton.addEventListener("click", createConversation);
+    elements.refreshConversationsButton.addEventListener("click", loadConversations);
+    elements.renameConversationButton.addEventListener("click", renameConversation);
+    elements.deleteConversationButton.addEventListener("click", deleteConversation);
+    elements.sendChatButton.addEventListener("click", sendChat);
+    elements.clearChatButton.addEventListener("click", clearVisibleChat);
+    elements.uploadButton.addEventListener("click", uploadFile);
+
+    render();
+    if (state.token) {
+        refreshMe();
+        loadConversations();
+    }
+
+    function switchMode(mode) {
+        state.mode = mode;
+        elements.loginTab.classList.toggle("active", mode === "login");
+        elements.registerTab.classList.toggle("active", mode === "register");
+        elements.nicknameField.classList.toggle("hidden", mode !== "register");
+        elements.authSubmitButton.textContent = mode === "login" ? "登录" : "注册并登录";
+        setStatus(elements.authStatus, "");
+    }
+
+    async function handleAuthSubmit(event) {
+        event.preventDefault();
+        const username = elements.usernameInput.value.trim();
+        const password = elements.passwordInput.value;
+        const nickname = elements.nicknameInput.value.trim();
+
+        if (!username || !password) {
+            setStatus(elements.authStatus, "请输入用户名和密码", "error");
+            return;
+        }
+
+        const payload = state.mode === "login" ? {username, password} : {username, password, nickname};
+        const endpoint = state.mode === "login" ? "/auth/login" : "/auth/register";
+        elements.authSubmitButton.disabled = true;
+        setStatus(elements.authStatus, "正在处理...");
+
+        try {
+            const data = await request(endpoint, {
+                method: "POST",
+                body: JSON.stringify(payload),
+                auth: false
+            });
+            saveSession(data);
+            setStatus(elements.authStatus, "登录成功", "ok");
+            elements.passwordInput.value = "";
+            await refreshMe();
+            await loadConversations();
+        } catch (error) {
+            setStatus(elements.authStatus, error.message, "error");
+        } finally {
+            elements.authSubmitButton.disabled = false;
+            render();
+        }
+    }
+
+    async function logout() {
+        try {
+            if (state.token) {
+                await request("/auth/logout", {method: "POST"});
+            }
+        } catch (error) {
+            setStatus(elements.authStatus, error.message, "error");
+        } finally {
+            clearSession();
+            render();
+        }
+    }
+
+    async function refreshMe() {
+        if (!state.token) {
+            setStatus(elements.meStatus, "请先登录", "error");
+            return;
+        }
+        setStatus(elements.meStatus, "正在读取用户上下文...");
+        try {
+            const data = await request("/auth/me", {method: "GET"});
+            state.user = {
+                userId: data.userId,
+                username: data.username,
+                nickname: data.nickname
+            };
+            localStorage.setItem(USER_KEY, JSON.stringify(state.user));
+            setStatus(elements.meStatus, JSON.stringify(data, null, 2), "ok");
+        } catch (error) {
+            setStatus(elements.meStatus, error.message, "error");
+            if (error.status === 401) {
+                clearSession();
+            }
+        } finally {
+            render();
+        }
+    }
+
+    async function loadConversations() {
+        if (!state.token) {
+            return;
+        }
+        setStatus(elements.conversationStatus, "正在加载会话...");
+        try {
+            state.conversations = await request("/agent/conversations", {method: "GET"}) || [];
+            if (!state.currentConversationId && state.conversations.length > 0) {
+                state.currentConversationId = state.conversations[0].conversationId;
+                localStorage.setItem(CONVERSATION_KEY, state.currentConversationId);
+            }
+            if (state.currentConversationId && !state.conversations.some(item => item.conversationId === state.currentConversationId)) {
+                state.currentConversationId = "";
+                localStorage.removeItem(CONVERSATION_KEY);
+            }
+            setStatus(elements.conversationStatus, `已加载 ${state.conversations.length} 个会话`, "ok");
+        } catch (error) {
+            setStatus(elements.conversationStatus, error.message, "error");
+            if (error.status === 401) {
+                clearSession();
+            }
+        } finally {
+            render();
+        }
+    }
+
+    async function createConversation() {
+        const title = window.prompt("请输入会话标题", "新会话");
+        if (title === null) {
+            return;
+        }
+        setStatus(elements.conversationStatus, "正在创建会话...");
+        try {
+            const conversation = await request("/agent/conversations", {
+                method: "POST",
+                body: JSON.stringify({title: title.trim() || "新会话"})
+            });
+            state.currentConversationId = conversation.conversationId;
+            localStorage.setItem(CONVERSATION_KEY, state.currentConversationId);
+            state.localMessages[state.currentConversationId] = [];
+            saveLocalMessages();
+            await loadConversations();
+            setStatus(elements.chatStatus, "已创建新会话", "ok");
+        } catch (error) {
+            setStatus(elements.conversationStatus, error.message, "error");
+        }
+    }
+
+    function selectConversation(conversationId) {
+        state.currentConversationId = conversationId;
+        localStorage.setItem(CONVERSATION_KEY, conversationId);
+        setStatus(elements.chatStatus, "已切换会话。当前后端暂未提供历史消息查询接口，页面只显示本浏览器本地缓存的消息。", "warning");
+        render();
+    }
+
+    async function renameConversation() {
+        const conversation = currentConversation();
+        if (!conversation) {
+            setStatus(elements.chatStatus, "请先选择会话", "error");
+            return;
+        }
+        const title = window.prompt("请输入新的会话标题", conversation.title || "新会话");
+        if (title === null) {
+            return;
+        }
+        try {
+            await request(`/agent/conversations/${conversation.conversationId}/title`, {
+                method: "PATCH",
+                body: JSON.stringify({title: title.trim() || "新会话"})
+            });
+            await loadConversations();
+            setStatus(elements.chatStatus, "会话标题已更新", "ok");
+        } catch (error) {
+            setStatus(elements.chatStatus, error.message, "error");
+        }
+    }
+
+    async function deleteConversation() {
+        const conversation = currentConversation();
+        if (!conversation) {
+            setStatus(elements.chatStatus, "请先选择会话", "error");
+            return;
+        }
+        if (!window.confirm(`确认删除会话「${conversation.title || conversation.conversationId}」？`)) {
+            return;
+        }
+        try {
+            await request(`/agent/conversations/${conversation.conversationId}`, {method: "DELETE", parseAsText: true});
+            delete state.localMessages[conversation.conversationId];
+            saveLocalMessages();
+            state.currentConversationId = "";
+            localStorage.removeItem(CONVERSATION_KEY);
+            await loadConversations();
+            setStatus(elements.chatStatus, "会话已删除", "ok");
+        } catch (error) {
+            setStatus(elements.chatStatus, error.message, "error");
+        }
+    }
+
+    async function sendChat() {
+        const query = elements.chatInput.value.trim();
+        if (!query) {
+            setStatus(elements.chatStatus, "请输入问题", "error");
+            return;
+        }
+
+        const pendingConversationId = state.currentConversationId;
+        appendMessage("user", query, pendingConversationId);
+        elements.chatInput.value = "";
+        elements.sendChatButton.disabled = true;
+        setStatus(elements.chatStatus, "Agent 正在回复...");
+
+        try {
+            const data = await request("/agent/chat", {
+                method: "POST",
+                body: JSON.stringify({
+                    conversationId: pendingConversationId || null,
+                    query
+                })
+            });
+            state.currentConversationId = data.conversationId;
+            localStorage.setItem(CONVERSATION_KEY, state.currentConversationId);
+            movePendingMessages(pendingConversationId, state.currentConversationId);
+            appendMessage("assistant", data.answer, state.currentConversationId);
+            setStatus(elements.chatStatus, `回复完成，会话：${data.conversationId}`, "ok");
+            setStatus(elements.apiStatus, JSON.stringify(data, null, 2), "ok");
+            await loadConversations();
+        } catch (error) {
+            setStatus(elements.chatStatus, error.message, "error");
+            if (error.status === 401) {
+                clearSession();
+            }
+        } finally {
+            elements.sendChatButton.disabled = false;
+            render();
+        }
+    }
+
+    async function uploadFile() {
+        const file = elements.fileInput.files[0];
         if (!file) {
-            alert("请选择文件");
+            setStatus(elements.uploadStatus, "请选择文件", "error");
             return;
         }
 
         const formData = new FormData();
         formData.append("file", file);
+        elements.uploadButton.disabled = true;
+        setStatus(elements.uploadStatus, "正在上传...");
 
-        fetch("http://localhost:8088/rag/ingest", {
-            method: "POST",
-            body: formData
-        })
-            .then(response => {
-                if (response.ok) {
-                    document.getElementById("result").innerText = "上传成功！";
-                } else {
-                    document.getElementById("result").innerText = "上传失败：" + response.status;
-                }
-            })
-            .catch(error => {
-                document.getElementById("result").innerText = "请求错误：" + error;
+        try {
+            await request("/rag/ingest", {
+                method: "POST",
+                body: formData,
+                parseAsText: true
             });
+            setStatus(elements.uploadStatus, "上传成功", "ok");
+            elements.fileInput.value = "";
+        } catch (error) {
+            setStatus(elements.uploadStatus, error.message, "error");
+            if (error.status === 401) {
+                clearSession();
+            }
+        } finally {
+            elements.uploadButton.disabled = false;
+            render();
+        }
+    }
+
+    async function request(path, options = {}) {
+        const headers = new Headers(options.headers || {});
+        const needsAuth = options.auth !== false;
+
+        if (needsAuth && state.token) {
+            headers.set("Authorization", `Bearer ${state.token}`);
+        }
+        if (!headers.has("Content-Type") && options.body && !(options.body instanceof FormData)) {
+            headers.set("Content-Type", "application/json;charset=UTF-8");
+        }
+
+        const response = await fetch(`${API_BASE}${path}`, {
+            method: options.method || "GET",
+            headers,
+            body: options.body
+        });
+
+        const text = await response.text();
+        if (!response.ok) {
+            const message = extractErrorMessage(text) || `请求失败：${response.status}`;
+            const error = new Error(message);
+            error.status = response.status;
+            throw error;
+        }
+
+        if (options.parseAsText) {
+            return text;
+        }
+        return text ? JSON.parse(text) : null;
+    }
+
+    function saveSession(data) {
+        state.token = data.token;
+        state.user = data.user;
+        localStorage.setItem(TOKEN_KEY, state.token);
+        localStorage.setItem(USER_KEY, JSON.stringify(state.user));
+    }
+
+    function clearSession() {
+        state.token = "";
+        state.user = null;
+        state.conversations = [];
+        state.currentConversationId = "";
+        state.localMessages = {};
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(USER_KEY);
+        localStorage.removeItem(CONVERSATION_KEY);
+        localStorage.removeItem(LOCAL_MESSAGES_KEY);
+        elements.tokenBox.classList.remove("active");
+        elements.tokenBox.textContent = "";
+        setStatus(elements.meStatus, "");
+        setStatus(elements.conversationStatus, "");
+        setStatus(elements.chatStatus, "");
+    }
+
+    function render() {
+        const loggedIn = Boolean(state.token && state.user);
+        elements.userChip.classList.toggle("active", loggedIn);
+        elements.workspace.classList.toggle("active", loggedIn);
+
+        if (loggedIn) {
+            const nickname = state.user.nickname || state.user.username;
+            elements.avatarText.textContent = nickname.slice(0, 1).toUpperCase();
+            elements.currentNickname.textContent = nickname;
+            elements.currentUsername.textContent = `${state.user.username} · ID ${state.user.userId}`;
+        }
+
+        renderConversations();
+        renderActiveConversation();
+        renderLocalMessages();
+    }
+
+    function renderConversations() {
+        elements.conversationList.innerHTML = "";
+        if (!state.conversations.length) {
+            const empty = document.createElement("div");
+            empty.className = "status";
+            empty.textContent = "暂无会话。可以点击新建会话，或直接发送第一条消息自动创建。";
+            elements.conversationList.appendChild(empty);
+            return;
+        }
+
+        for (const conversation of state.conversations) {
+            const item = document.createElement("button");
+            item.type = "button";
+            item.className = "conversation-item";
+            item.classList.toggle("active", conversation.conversationId === state.currentConversationId);
+            item.addEventListener("click", () => selectConversation(conversation.conversationId));
+
+            const title = document.createElement("div");
+            title.className = "conversation-title";
+            title.textContent = conversation.title || "新会话";
+
+            const meta = document.createElement("div");
+            meta.className = "conversation-meta";
+            meta.textContent = `消息 ${conversation.messageCount || 0} · ${formatDate(conversation.lastMessageAt || conversation.updatedAt || conversation.createdAt)}`;
+
+            item.append(title, meta);
+            elements.conversationList.appendChild(item);
+        }
+    }
+
+    function renderActiveConversation() {
+        const conversation = currentConversation();
+        elements.renameConversationButton.disabled = !conversation;
+        elements.deleteConversationButton.disabled = !conversation;
+
+        if (!conversation) {
+            elements.activeConversationTitle.textContent = "未选择会话";
+            elements.activeConversationMeta.textContent = "发送第一条消息时，后端会自动创建会话。";
+            return;
+        }
+
+        elements.activeConversationTitle.textContent = conversation.title || "新会话";
+        elements.activeConversationMeta.textContent = `conversationId: ${conversation.conversationId}`;
+    }
+
+    function renderLocalMessages() {
+        elements.chatLog.innerHTML = "";
+        const key = state.currentConversationId || "__pending__";
+        const messages = state.localMessages[key] || [];
+        if (!messages.length) {
+            const empty = document.createElement("div");
+            empty.className = "status";
+            empty.textContent = "当前页面还没有显示消息。后端短期记忆会参与回答，但此页面只缓存本浏览器发送过的消息。";
+            elements.chatLog.appendChild(empty);
+            return;
+        }
+        for (const message of messages) {
+            renderMessageBubble(message.role, message.content);
+        }
+    }
+
+    function appendMessage(role, content, conversationId = state.currentConversationId) {
+        const key = conversationId || "__pending__";
+        if (!state.localMessages[key]) {
+            state.localMessages[key] = [];
+        }
+        state.localMessages[key].push({role, content});
+        saveLocalMessages();
+        renderLocalMessages();
+    }
+
+    function renderMessageBubble(role, content) {
+        const item = document.createElement("div");
+        item.className = `message ${role}`;
+
+        const roleLabel = document.createElement("div");
+        roleLabel.className = "role";
+        roleLabel.textContent = role === "user" ? "你" : "Agent";
+
+        const body = document.createElement("div");
+        body.textContent = content;
+
+        item.append(roleLabel, body);
+        elements.chatLog.appendChild(item);
+        elements.chatLog.scrollTop = elements.chatLog.scrollHeight;
+    }
+
+    function movePendingMessages(previousConversationId, nextConversationId) {
+        if (previousConversationId || !state.localMessages.__pending__) {
+            return;
+        }
+        state.localMessages[nextConversationId] = [
+            ...(state.localMessages[nextConversationId] || []),
+            ...state.localMessages.__pending__
+        ];
+        delete state.localMessages.__pending__;
+        saveLocalMessages();
+    }
+
+    function clearVisibleChat() {
+        const key = state.currentConversationId || "__pending__";
+        state.localMessages[key] = [];
+        saveLocalMessages();
+        renderLocalMessages();
+    }
+
+    function currentConversation() {
+        return state.conversations.find(item => item.conversationId === state.currentConversationId);
+    }
+
+    function toggleToken() {
+        if (!state.token) {
+            setStatus(elements.authStatus, "当前没有令牌", "error");
+            return;
+        }
+        elements.tokenBox.classList.toggle("active");
+        elements.tokenBox.textContent = state.token;
+    }
+
+    function saveLocalMessages() {
+        localStorage.setItem(LOCAL_MESSAGES_KEY, JSON.stringify(state.localMessages));
+    }
+
+    function setStatus(element, message, type) {
+        element.textContent = message || "";
+        element.classList.toggle("ok", type === "ok");
+        element.classList.toggle("error", type === "error");
+        element.classList.toggle("warning", type === "warning");
+    }
+
+    function extractErrorMessage(text) {
+        if (!text) {
+            return "";
+        }
+        try {
+            const data = JSON.parse(text);
+            return data.message || data.error || data.path || text;
+        } catch (error) {
+            return text;
+        }
+    }
+
+    function readJson(value) {
+        if (!value) {
+            return null;
+        }
+        try {
+            return JSON.parse(value);
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function formatDate(value) {
+        if (!value) {
+            return "暂无时间";
+        }
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+            return value;
+        }
+        return date.toLocaleString();
     }
 </script>
-
 </body>
 </html>

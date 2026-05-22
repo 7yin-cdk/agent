@@ -13,4 +13,9 @@ public interface TextChunkMapper {
      * 批量插入分片
      */
     void batchInsert(@Param("list") List<TextChunk> list);
+
+    /**
+     * 根据 chunkId 列表查询分片，并保持传入 ID 的顺序
+     */
+    List<TextChunk> selectByChunkIds(@Param("chunkIds") List<Long> chunkIds);
 }

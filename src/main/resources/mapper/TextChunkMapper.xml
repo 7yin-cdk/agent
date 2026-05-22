@@ -7,6 +7,7 @@
 
     <insert id="batchInsert">
         INSERT INTO text_chunk (
+        chunk_id,
         file_id,
         chunk_index,
         chunk_text,
@@ -20,6 +21,7 @@
         VALUES
         <foreach collection="list" item="item" separator=",">
             (
+            #{item.chunkId},
             #{item.fileId},
             #{item.chunkIndex},
             #{item.chunkText},
@@ -32,5 +34,28 @@
             )
         </foreach>
     </insert>
+
+    <select id="selectByChunkIds" resultType="com.library.agent.entity.TextChunk">
+        SELECT
+        c.chunk_id,
+        c.file_id,
+        c.chunk_index,
+        c.chunk_text,
+        c.chunk_length,
+        c.start_offset,
+        c.end_offset,
+        c.status,
+        c.created_at,
+        c.updated_at
+        FROM text_chunk c
+        JOIN (
+        VALUES
+        <foreach collection="chunkIds" item="id" index="idx" separator=",">
+            (#{id}, #{idx})
+        </foreach>
+        ) AS t(chunk_id, sort_order)
+        ON c.chunk_id = t.chunk_id
+        ORDER BY t.sort_order
+    </select>
 
 </mapper>

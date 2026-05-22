@@ -1,7 +1,7 @@
-package MQ.consumer;
+package com.library.agent.MQ.consumer;
 
-import MQ.Message.RagIngestMessage;
-import MQ.processor.RagAsyncProcessor;
+import com.library.agent.MQ.Message.RagIngestMessage;
+import com.library.agent.MQ.processor.RagAsyncProcessor;
 import lombok.RequiredArgsConstructor;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.apache.rocketmq.spring.core.RocketMQListener;

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.library.agent.mapper.TextChunkVectorMapper">
+
+    <insert id="batchInsert" parameterType="java.util.List">
+        INSERT INTO text_chunk_vector
+        (chunk_id, file_id, chunk_index, embedding, created_at)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (
+            #{item.chunkId},
+            #{item.fileId},
+            #{item.chunkIndex},
+            #{item.embedding, typeHandler=com.library.agent.handler.FloatArrayTypeHandler},
+            #{item.createdAt}
+            )
+        </foreach>
+    </insert>
+
+    <select id="selectTopKChunkIds" resultType="java.lang.Long">
+        SELECT chunk_id
+        FROM text_chunk_vector
+        ORDER BY embedding <![CDATA[<=>]]> #{embedding, typeHandler=com.library.agent.handler.FloatArrayTypeHandler}
+        LIMIT #{topK}
+    </select>
+
+</mapper>

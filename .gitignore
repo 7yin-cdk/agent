@@ -31,3 +31,5 @@ build/
 
 ### VS Code ###
 .vscode/
+/broker.conf
+/src/main/resources/static/rag.html

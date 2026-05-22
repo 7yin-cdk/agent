@@ -1,15 +1,17 @@
 package com.library.agent.rag.service;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tika.Tika;
 import org.apache.tika.metadata.Metadata;
 import org.springframework.stereotype.Component;
-import org.springframework.web.multipart.MultipartFile;
+
 
 import java.io.InputStream;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class DocumentParser {
 
     private final Tika tika = new Tika();
@@ -17,8 +19,8 @@ public class DocumentParser {
     /**
      * 文档解析为纯文本（仅支持可解析文档）
      */
-    public String parse(MultipartFile file) {
-        try (InputStream inputStream = file.getInputStream()) {
+    public String parse(InputStream inputStream) {
+        try {
 
             Metadata metadata = new Metadata();
             String content = tika.parseToString(inputStream, metadata);

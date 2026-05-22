@@ -1,6 +1,6 @@
-package MQ.processor;
+package com.library.agent.MQ.processor;
 
-import MQ.Message.RagIngestMessage;
+import com.library.agent.MQ.Message.RagIngestMessage;
 import cn.hutool.core.lang.Snowflake;
 import cn.hutool.core.util.IdUtil;
 import com.library.agent.entity.TextChunk;

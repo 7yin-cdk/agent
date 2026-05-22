@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.library.agent.mapper.AgentConversationMapper">
+
+    <resultMap id="AgentConversationResultMap" type="com.library.agent.entity.AgentConversation">
+        <id property="id" column="id"/>
+        <result property="userId" column="user_id"/>
+        <result property="conversationId" column="conversation_id"/>
+        <result property="title" column="title"/>
+        <result property="status" column="status"/>
+        <result property="messageCount" column="message_count"/>
+        <result property="lastMessageAt" column="last_message_at"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <insert id="insert"
+            parameterType="com.library.agent.entity.AgentConversation"
+            useGeneratedKeys="true"
+            keyProperty="id">
+        INSERT INTO agent_conversation
+        (
+            user_id,
+            conversation_id,
+            title,
+            status,
+            message_count,
+            last_message_at,
+            created_at,
+            updated_at
+        )
+        VALUES
+        (
+            #{userId},
+            #{conversationId},
+            #{title},
+            COALESCE(#{status}, 'ACTIVE'),
+            COALESCE(#{messageCount}, 0),
+            #{lastMessageAt},
+            COALESCE(#{createdAt}, CURRENT_TIMESTAMP),
+            COALESCE(#{updatedAt}, CURRENT_TIMESTAMP)
+        )
+    </insert>
+
+    <select id="selectByUserIdAndConversationId" resultMap="AgentConversationResultMap">
+        SELECT
+            id,
+            user_id,
+            conversation_id,
+            title,
+            status,
+            message_count,
+            last_message_at,
+            created_at,
+            updated_at
+        FROM agent_conversation
+        WHERE user_id = #{userId}
+          AND conversation_id = #{conversationId}
+    </select>
+
+    <select id="selectActiveByUserId" resultMap="AgentConversationResultMap">
+        SELECT
+            id,
+            user_id,
+            conversation_id,
+            title,
+            status,
+            message_count,
+            last_message_at,
+            created_at,
+            updated_at
+        FROM agent_conversation
+        WHERE user_id = #{userId}
+          AND status = 'ACTIVE'
+        ORDER BY COALESCE(last_message_at, updated_at, created_at) DESC
+    </select>
+
+    <update id="updateTitle">
+        UPDATE agent_conversation
+        SET title = #{title},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = #{userId}
+          AND conversation_id = #{conversationId}
+          AND status = 'ACTIVE'
+    </update>
+
+    <update id="logicalDelete">
+        UPDATE agent_conversation
+        SET status = 'DELETED',
+            updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = #{userId}
+          AND conversation_id = #{conversationId}
+          AND status = 'ACTIVE'
+    </update>
+
+    <update id="touch">
+        UPDATE agent_conversation
+        SET message_count = message_count + COALESCE(#{messageIncrement}, 0),
+            last_message_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = #{userId}
+          AND conversation_id = #{conversationId}
+          AND status = 'ACTIVE'
+    </update>
+
+</mapper>

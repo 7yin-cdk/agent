@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 public class TextChunk {
 
     /** 主键ID */
-    private Long id;
+    private Long chunkId;
 
     /** 所属文件ID */
     private Long fileId;

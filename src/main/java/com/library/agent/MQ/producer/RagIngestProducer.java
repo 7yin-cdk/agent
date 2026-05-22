@@ -1,6 +1,6 @@
-package MQ.producer;
+package com.library.agent.MQ.producer;
 
-import MQ.Message.RagIngestMessage;
+import com.library.agent.MQ.Message.RagIngestMessage;
 import lombok.RequiredArgsConstructor;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.springframework.stereotype.Service;

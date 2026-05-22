@@ -1,8 +1,12 @@
-package MQ.Message;
+package com.library.agent.MQ.Message;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class RagIngestMessage {
     /**
      * 文件id
@@ -24,8 +28,4 @@ public class RagIngestMessage {
      */
     private String fileName;
 
-    /**
-     * 文件类型
-     */
-    private String contentType;
 }
