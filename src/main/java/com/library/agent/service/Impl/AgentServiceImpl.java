@@ -9,6 +9,7 @@ import com.library.agent.dto.ChatRequest;
 import com.library.agent.dto.ChatResponse;
 import com.library.agent.entity.AgentShortTermMemory;
 import com.library.agent.enums.IntentType;
+import com.library.agent.llm.Assistant;
 import com.library.agent.llm.LlmService;
 import com.library.agent.llm.PromptBuilder;
 import com.library.agent.memory.ShortTermMemoryService;
@@ -45,6 +46,7 @@ public class AgentServiceImpl implements AgentService {
     private final RagService ragService;
     private final ConversationService conversationService;
     private final ShortTermMemoryService shortTermMemoryService;
+    private final Assistant  assistant;
 
     /**
      * 执行带会话的 Agent 聊天。
@@ -65,7 +67,7 @@ public class AgentServiceImpl implements AgentService {
         );
         //意图识别
         IntentType intentType = identifyIntent(query, limitHistoryForIntent(historyMessages));
-        //构建单词聊天上下文对象
+        //构建单次聊天上下文对象
         AgentChatContext context = buildChatContext(userId, conversationId, query, intentType, historyMessages);
         String answer = route(intentType, context);
         //保存本次聊天
@@ -103,7 +105,7 @@ public class AgentServiceImpl implements AgentService {
                         context.getQuery(),
                         context.getHistoryMessages()
                 );
-                yield llmService.toolChat(toolPrompt);
+                yield assistant.chat(toolPrompt);
             }
             case SIMPLE_CHAT -> {
                 String prompt = PromptBuilder.buildSimplePrompt(

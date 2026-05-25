@@ -13,9 +13,9 @@ public class LangChain4jConfig {
 
     @Bean
     public ChatModel chatModel(
-            @Value("${bailian.chat-url}") String baseUrl,
+            @Value("${bailian.tool-chat-url}") String baseUrl,
             @Value("${bailian.api-key}") String apiKey,
-            @Value("${bailian.tool-chat-url}") String modelName
+            @Value("${bailian.chat-model}") String modelName
     ) {
         return OpenAiChatModel.builder()
                 .baseUrl(baseUrl)

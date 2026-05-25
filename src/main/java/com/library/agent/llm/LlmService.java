@@ -26,10 +26,10 @@ public interface LlmService {
      */
     List<Float> embed(String text);
 
-    /**
-     * 与具有工具调用功能的大模型交互
-     * @param prompt
-     * @return
-     */
-    String toolChat(String prompt);
+//    /**
+//     * 与具有工具调用功能的大模型交互
+//     * @param prompt
+//     * @return
+//     */
+//    String toolChat(String prompt);
 }

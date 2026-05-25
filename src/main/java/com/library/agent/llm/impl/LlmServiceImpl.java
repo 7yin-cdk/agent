@@ -260,8 +260,8 @@ public class LlmServiceImpl implements LlmService {
     }
 
 
-    public String toolChat(String prompt){
-        return toolChatModel.chat(prompt);
-    }
+//    public String toolChat(String prompt){
+//        return toolChatModel.chat(prompt);
+//    }
 
 }
