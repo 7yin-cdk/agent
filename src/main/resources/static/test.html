@@ -652,7 +652,7 @@
     elements.refreshConversationsButton.addEventListener("click", loadConversations);
     elements.renameConversationButton.addEventListener("click", renameConversation);
     elements.deleteConversationButton.addEventListener("click", deleteConversation);
-    elements.sendChatButton.addEventListener("click", sendChat);
+    elements.sendChatButton.addEventListener("click", sendChatStream);
     elements.clearChatButton.addEventListener("click", clearVisibleChat);
     elements.uploadButton.addEventListener("click", uploadFile);
 
@@ -882,6 +882,85 @@
         }
     }
 
+    async function sendChatStream() {
+        const query = elements.chatInput.value.trim();
+        if (!query) {
+            setStatus(elements.chatStatus, "Please enter a question.", "error");
+            return;
+        }
+
+        const pendingConversationId = state.currentConversationId;
+        appendMessage("user", query, pendingConversationId);
+        elements.chatInput.value = "";
+        elements.sendChatButton.disabled = true;
+        setStatus(elements.chatStatus, "Agent streaming...");
+
+        try {
+            let assistantConversationId = pendingConversationId;
+            let assistantMessageIndex = -1;
+            let assistantAnswer = "";
+
+            await streamRequest("/agent/chat/stream", {
+                method: "POST",
+                body: JSON.stringify({
+                    conversationId: pendingConversationId || null,
+                    query
+                })
+            }, {
+                meta(data) {
+                    if (!data || !data.conversationId) {
+                        return;
+                    }
+                    state.currentConversationId = data.conversationId;
+                    localStorage.setItem(CONVERSATION_KEY, state.currentConversationId);
+                    movePendingMessages(pendingConversationId, state.currentConversationId);
+                    assistantConversationId = state.currentConversationId;
+                },
+                status(data) {
+                    setStatus(elements.chatStatus, `Agent streaming... ${data && data.intentType ? data.intentType : ""}`);
+                },
+                delta(data) {
+                    const content = data && data.content ? data.content : "";
+                    if (!content) {
+                        return;
+                    }
+                    if (assistantMessageIndex < 0) {
+                        assistantMessageIndex = appendMessage("assistant", "", assistantConversationId);
+                    }
+                    assistantAnswer += content;
+                    updateMessage(assistantConversationId, assistantMessageIndex, assistantAnswer);
+                },
+                done(data) {
+                    if (data && data.conversationId) {
+                        state.currentConversationId = data.conversationId;
+                        localStorage.setItem(CONVERSATION_KEY, state.currentConversationId);
+                    }
+                    if (assistantMessageIndex < 0) {
+                        assistantMessageIndex = appendMessage(
+                            "assistant",
+                            data && data.answer ? data.answer : assistantAnswer,
+                            state.currentConversationId
+                        );
+                    }
+                    setStatus(elements.chatStatus, `Stream complete: ${state.currentConversationId}`, "ok");
+                    setStatus(elements.apiStatus, JSON.stringify(data || {}, null, 2), "ok");
+                },
+                error(data) {
+                    throw new Error(data && data.message ? data.message : "Stream failed");
+                }
+            });
+            await loadConversations();
+        } catch (error) {
+            setStatus(elements.chatStatus, error.message, "error");
+            if (error.status === 401) {
+                clearSession();
+            }
+        } finally {
+            elements.sendChatButton.disabled = false;
+            render();
+        }
+    }
+
     async function uploadFile() {
         const file = elements.fileInput.files[0];
         if (!file) {
@@ -942,6 +1021,90 @@
             return text;
         }
         return text ? JSON.parse(text) : null;
+    }
+
+    async function streamRequest(path, options = {}, handlers = {}) {
+        const headers = new Headers(options.headers || {});
+        const needsAuth = options.auth !== false;
+
+        if (needsAuth && state.token) {
+            headers.set("Authorization", `Bearer ${state.token}`);
+        }
+        if (!headers.has("Content-Type") && options.body && !(options.body instanceof FormData)) {
+            headers.set("Content-Type", "application/json;charset=UTF-8");
+        }
+        headers.set("Accept", "text/event-stream");
+
+        const response = await fetch(`${API_BASE}${path}`, {
+            method: options.method || "GET",
+            headers,
+            body: options.body
+        });
+
+        if (!response.ok) {
+            const text = await response.text();
+            const message = extractErrorMessage(text) || `Request failed: ${response.status}`;
+            const error = new Error(message);
+            error.status = response.status;
+            throw error;
+        }
+
+        if (!response.body) {
+            throw new Error("Streaming response is not supported by this browser.");
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = "";
+
+        while (true) {
+            const {value, done} = await reader.read();
+            if (done) {
+                break;
+            }
+            buffer += decoder.decode(value, {stream: true});
+            const blocks = buffer.split(/\r?\n\r?\n/);
+            buffer = blocks.pop() || "";
+            for (const block of blocks) {
+                handleSseBlock(block, handlers);
+            }
+        }
+
+        buffer += decoder.decode();
+        if (buffer.trim()) {
+            handleSseBlock(buffer, handlers);
+        }
+    }
+
+    function handleSseBlock(block, handlers) {
+        let eventName = "message";
+        const dataLines = [];
+
+        for (const rawLine of block.split(/\r?\n/)) {
+            const line = rawLine.trimEnd();
+            if (line.startsWith("event:")) {
+                eventName = line.slice(6).trim();
+            } else if (line.startsWith("data:")) {
+                dataLines.push(line.slice(5).trimStart());
+            }
+        }
+
+        if (!dataLines.length) {
+            return;
+        }
+
+        const rawData = dataLines.join("\n");
+        let data = rawData;
+        try {
+            data = JSON.parse(rawData);
+        } catch (error) {
+            // Plain text SSE data is still valid.
+        }
+
+        const handler = handlers[eventName];
+        if (handler) {
+            handler(data);
+        }
     }
 
     function saveSession(data) {
@@ -1052,6 +1215,19 @@
             state.localMessages[key] = [];
         }
         state.localMessages[key].push({role, content});
+        const index = state.localMessages[key].length - 1;
+        saveLocalMessages();
+        renderLocalMessages();
+        return index;
+    }
+
+    function updateMessage(conversationId, index, content) {
+        const key = conversationId || "__pending__";
+        const messages = state.localMessages[key] || [];
+        if (!messages[index]) {
+            return;
+        }
+        messages[index].content = content;
         saveLocalMessages();
         renderLocalMessages();
     }

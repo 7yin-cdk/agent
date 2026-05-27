@@ -1,6 +1,8 @@
 package com.library.agent.service.Impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.library.agent.auth.context.UserContextHolder;
+import com.library.agent.auth.context.UserContext;
 import com.library.agent.context.AgentChatContext;
 import com.library.agent.conversation.dto.ConversationResponse;
 import com.library.agent.conversation.dto.CreateConversationRequest;
@@ -20,9 +22,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
 /**
  * Agent 聊天编排服务实现。
@@ -32,6 +39,8 @@ import java.util.Locale;
 @Service
 @RequiredArgsConstructor
 public class AgentServiceImpl implements AgentService {
+
+    private static final ObjectMapper SSE_OBJECT_MAPPER = new ObjectMapper();
 
     /**
      * 回答阶段召回的短期记忆条数。
@@ -92,6 +101,31 @@ public class AgentServiceImpl implements AgentService {
         return response;
     }
 
+    @Override
+    public SseEmitter chatStream(ChatRequest request) {
+        validateChatRequest(request);
+
+        UserContext userContext = UserContextHolder.get();
+        if (userContext == null || userContext.getUserId() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+        }
+
+        SseEmitter emitter = new SseEmitter(120000L);
+        CompletableFuture.runAsync(() -> {
+            UserContextHolder.set(userContext);
+            try {
+                doChatStream(request, emitter);
+                emitter.complete();
+            } catch (Exception e) {
+                sendEvent(emitter, "error", Map.of("message", e.getMessage() == null ? "Stream failed" : e.getMessage()));
+                emitter.complete();
+            } finally {
+                UserContextHolder.clear();
+            }
+        });
+        return emitter;
+    }
+
     /**
      * 兼容旧调用：直接通过 query 和 conversationId 发起聊天。
      */
@@ -108,13 +142,69 @@ public class AgentServiceImpl implements AgentService {
      */
     @Override
     public String route(IntentType intentType, AgentChatContext context) {
+        StringBuilder answer = new StringBuilder();
+        routeStream(intentType, context, answer::append);
+        return answer.toString();
+    }
+
+    /**
+     * 根据当前问题和最近会话历史识别意图。
+     */
+    private void doChatStream(ChatRequest request, SseEmitter emitter) {
+        Long userId = requireCurrentUserId();
+        String query = request.getQuery().trim();
+        String conversationId = resolveConversationId(userId, request.getConversationId(), query);
+
+        sendEvent(emitter, "meta", Map.of("conversationId", conversationId));
+
+        List<AgentShortTermMemory> historyMessages = shortTermMemoryService.listRecentMessages(
+                userId,
+                conversationId,
+                ANSWER_HISTORY_LIMIT
+        );
+        String conversationSummary = conversationSummaryService.getSummary(userId, conversationId);
+        IntentType intentType = identifyIntent(query, limitHistoryForIntent(historyMessages));
+
+        sendEvent(emitter, "status", Map.of(
+                "conversationId", conversationId,
+                "intentType", intentType.name()
+        ));
+
+        AgentChatContext context = buildChatContext(
+                userId,
+                conversationId,
+                query,
+                intentType,
+                historyMessages,
+                conversationSummary
+        );
+
+        StringBuilder answer = new StringBuilder();
+        routeStream(intentType, context, delta -> {
+            answer.append(delta);
+            sendEvent(emitter, "delta", Map.of("content", delta));
+        });
+
+        String finalAnswer = answer.toString();
+        shortTermMemoryService.saveUserAndAssistantMessages(userId, conversationId, query, finalAnswer);
+        conversationService.touchConversation(userId, conversationId, 2);
+        conversationSummaryService.triggerSummaryIfNeeded(userId, conversationId);
+
+        sendEvent(emitter, "done", Map.of(
+                "conversationId", conversationId,
+                "answer", finalAnswer
+        ));
+    }
+
+    private void routeStream(IntentType intentType, AgentChatContext context, Consumer<String> onDelta) {
         IntentType safeIntentType = intentType == null ? IntentType.SIMPLE_CHAT : intentType;
 
-        return switch (safeIntentType) {
-            case KNOWLEDGE_BASE -> ragService.query(
+        switch (safeIntentType) {
+            case KNOWLEDGE_BASE -> ragService.queryStream(
                     context.getQuery(),
                     context.getConversationSummary(),
-                    context.getHistoryMessages()
+                    context.getHistoryMessages(),
+                    onDelta
             );
             case TOOL_CALL -> {
                 String toolPrompt = PromptBuilder.buildToolPrompt(
@@ -122,7 +212,7 @@ public class AgentServiceImpl implements AgentService {
                         context.getConversationSummary(),
                         context.getHistoryMessages()
                 );
-                yield assistant.chat(toolPrompt);
+                onDelta.accept(assistant.chat(toolPrompt));
             }
             case SIMPLE_CHAT -> {
                 String prompt = PromptBuilder.buildSimplePrompt(
@@ -130,14 +220,19 @@ public class AgentServiceImpl implements AgentService {
                         context.getConversationSummary(),
                         context.getHistoryMessages()
                 );
-                yield llmService.chat(prompt);
+                llmService.chatStream(prompt, onDelta);
             }
-        };
+        }
     }
 
-    /**
-     * 根据当前问题和最近会话历史识别意图。
-     */
+    private void sendEvent(SseEmitter emitter, String eventName, Object data) {
+        try {
+            emitter.send(SseEmitter.event().name(eventName).data(SSE_OBJECT_MAPPER.writeValueAsString(data)));
+        } catch (IOException e) {
+            throw new RuntimeException("SSE send failed", e);
+        }
+    }
+
     @Override
     public IntentType identifyIntent(String query, List<AgentShortTermMemory> historyMessages) {
         if (query == null || query.trim().isEmpty()) {
@@ -273,7 +368,7 @@ public class AgentServiceImpl implements AgentService {
     private String buildIntentPrompt(String query, List<AgentShortTermMemory> historyMessages) {
         StringBuilder prompt = new StringBuilder();
         prompt.append("你是一个意图识别器。请判断用户问题属于以下哪一种意图：\n");
-        prompt.append("1. KNOWLEDGE_BASE：需要查询知识库、文档、资料、制度、规则后回答。\n");
+        prompt.append("1. KNOWLEDGE_BASE：需要查询知识库、文档、资料、制度、规则后回答。只有用户问到文档，文件相关的问题才需要查询知识库git\n");
         prompt.append("2. TOOL_CALL：需要调用外部工具、接口、数据库、计算器或执行动作。\n");
         prompt.append("3. SIMPLE_CHAT：普通聊天、解释概念、闲聊，或不需要知识库和工具的问题。\n\n");
 

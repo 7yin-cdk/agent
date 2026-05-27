@@ -24,6 +24,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 /**
  * RAG 知识库服务实现。
@@ -91,6 +92,23 @@ public class RagServiceImpl implements RagService {
 
     @Override
     public String query(String text, String conversationSummary, List<AgentShortTermMemory> historyMessages) {
+        StringBuilder answer = new StringBuilder();
+        queryStream(text, conversationSummary, historyMessages, answer::append);
+        return answer.toString();
+    }
+
+    @Override
+    public void queryStream(
+            String text,
+            String conversationSummary,
+            List<AgentShortTermMemory> historyMessages,
+            Consumer<String> onDelta
+    ) {
+        String prompt = buildRagPrompt(text, conversationSummary, historyMessages);
+        llmService.chatStream(prompt, onDelta);
+    }
+
+    private String buildRagPrompt(String text, String conversationSummary, List<AgentShortTermMemory> historyMessages) {
         List<Float> embed = llmService.embed(text);
 
         // pgvector 查询使用 float[]，这里将模型返回的 List<Float> 转换成数组。
@@ -106,8 +124,7 @@ public class RagServiceImpl implements RagService {
             chunks.add(textChunk.getChunkText());
         }
 
-        String prompt = PromptBuilder.buildRagPrompt(text, conversationSummary, historyMessages, chunks);
-        return llmService.chat(prompt);
+        return PromptBuilder.buildRagPrompt(text, conversationSummary, historyMessages, chunks);
     }
 
     /**

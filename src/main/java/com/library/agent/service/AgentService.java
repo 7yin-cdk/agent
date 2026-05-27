@@ -5,6 +5,7 @@ import com.library.agent.dto.ChatRequest;
 import com.library.agent.dto.ChatResponse;
 import com.library.agent.entity.AgentShortTermMemory;
 import com.library.agent.enums.IntentType;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 
@@ -22,6 +23,8 @@ public interface AgentService {
      * @return 聊天响应
      */
     ChatResponse chat(ChatRequest request);
+
+    SseEmitter chatStream(ChatRequest request);
 
     /**
      * 兼容旧调用：直接使用 query 和 conversationId 发起聊天。

@@ -4,11 +4,13 @@ import com.library.agent.dto.ChatRequest;
 import com.library.agent.dto.ChatResponse;
 import com.library.agent.service.AgentService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
  * Agent 聊天接口控制器。
@@ -44,6 +46,22 @@ public class AgentController {
             chatRequest.setConversationId(conversationId);
         }
         return agentService.chat(chatRequest);
+    }
+
+    @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter chatStream(
+            @RequestBody(required = false) ChatRequest request,
+            @RequestParam(value = "query", required = false) String query,
+            @RequestParam(value = "conversationId", required = false) String conversationId
+    ) {
+        ChatRequest chatRequest = request == null ? new ChatRequest() : request;
+        if (chatRequest.getQuery() == null) {
+            chatRequest.setQuery(query);
+        }
+        if (chatRequest.getConversationId() == null) {
+            chatRequest.setConversationId(conversationId);
+        }
+        return agentService.chatStream(chatRequest);
     }
 
 }

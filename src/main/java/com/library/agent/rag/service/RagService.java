@@ -4,6 +4,7 @@ import com.library.agent.entity.AgentShortTermMemory;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * RAG 知识库服务。
@@ -29,4 +30,11 @@ public interface RagService {
     String query(String question, List<AgentShortTermMemory> historyMessages);
 
     String query(String question, String conversationSummary, List<AgentShortTermMemory> historyMessages);
+
+    void queryStream(
+            String question,
+            String conversationSummary,
+            List<AgentShortTermMemory> historyMessages,
+            Consumer<String> onDelta
+    );
 }

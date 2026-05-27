@@ -18,6 +18,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 @Service
 @RequiredArgsConstructor
@@ -125,6 +126,110 @@ public class LlmServiceImpl implements LlmService {
 
         } catch (Exception e) {
             throw new RuntimeException("百炼Chat失败", e);
+        }
+    }
+
+    @Override
+    public void chatStream(String prompt, Consumer<String> onDelta) {
+        if (prompt == null || prompt.trim().isEmpty()) {
+            throw new RuntimeException("Prompt cannot be empty");
+        }
+        if (onDelta == null) {
+            throw new RuntimeException("onDelta cannot be null");
+        }
+
+        try {
+            ObjectMapper objectMapper = new ObjectMapper();
+
+            URL url = new URL(chatUrl);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Authorization", "Bearer " + apiKey);
+            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            conn.setRequestProperty("Accept", "text/event-stream");
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(120000);
+            conn.setDoOutput(true);
+
+            ObjectNode requestJson = objectMapper.createObjectNode();
+            requestJson.put("model", chatModel);
+            requestJson.put("temperature", 0.2);
+            requestJson.put("stream", true);
+
+            ArrayNode messages = objectMapper.createArrayNode();
+
+            ObjectNode systemMessage = objectMapper.createObjectNode();
+            systemMessage.put("role", "system");
+            systemMessage.put("content", "You are a careful knowledge base assistant. Answer only from the provided context and do not fabricate.");
+            messages.add(systemMessage);
+
+            ObjectNode userMessage = objectMapper.createObjectNode();
+            userMessage.put("role", "user");
+            userMessage.put("content", prompt);
+            messages.add(userMessage);
+
+            requestJson.set("messages", messages);
+
+            String requestBody = objectMapper.writeValueAsString(requestJson);
+
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(requestBody.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+
+            int code = conn.getResponseCode();
+            InputStream inputStream = (code >= 200 && code < 300)
+                    ? conn.getInputStream()
+                    : conn.getErrorStream();
+
+            if (code < 200 || code >= 300) {
+                StringBuilder response = new StringBuilder();
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(inputStream, java.nio.charset.StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        response.append(line);
+                    }
+                }
+                throw new RuntimeException("Chat request failed, HTTP status=" + code + ", response=" + response);
+            }
+
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(inputStream, java.nio.charset.StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    String trimmedLine = line.trim();
+                    if (trimmedLine.isEmpty() || !trimmedLine.startsWith("data:")) {
+                        continue;
+                    }
+
+                    String data = trimmedLine.substring(5).trim();
+                    if ("[DONE]".equals(data)) {
+                        break;
+                    }
+
+                    JsonNode root = objectMapper.readTree(data);
+                    if (root.has("error")) {
+                        throw new RuntimeException("Chat failed: " + root.get("error").toString());
+                    }
+
+                    JsonNode choices = root.get("choices");
+                    if (choices == null || !choices.isArray() || choices.size() == 0) {
+                        continue;
+                    }
+
+                    JsonNode content = choices.get(0).path("delta").path("content");
+                    if (!content.isMissingNode() && !content.isNull()) {
+                        String token = content.asText();
+                        if (!token.isEmpty()) {
+                            onDelta.accept(token);
+                        }
+                    }
+                }
+            }
+
+        } catch (Exception e) {
+            throw new RuntimeException("Streaming chat failed", e);
         }
     }
 

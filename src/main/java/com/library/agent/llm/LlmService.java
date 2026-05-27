@@ -1,6 +1,7 @@
 package com.library.agent.llm;
 
 import java.util.List;
+import java.util.function.Consumer;
 
 public interface LlmService {
 
@@ -10,6 +11,14 @@ public interface LlmService {
      * @return
      */
     String chat(String prompt);
+
+    /**
+     * Stream chat response tokens for a prompt.
+     *
+     * @param prompt assembled prompt
+     * @param onDelta token callback
+     */
+    void chatStream(String prompt, Consumer<String> onDelta);
 
     /**
      * 将多个文本转为向量（1024维）
