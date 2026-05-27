@@ -77,7 +77,7 @@ public class RagAsyncProcessor {
 
         List<String> chunks = new ArrayList<>();
         StringBuilder currentChunk = new StringBuilder();
-
+        // 合并较短的段落
         for (String para : paragraphs) {
             if (currentChunk.length() + para.length() <= MAX_CHUNK_SIZE) {
                 currentChunk.append(para).append("\n");
@@ -226,12 +226,6 @@ public class RagAsyncProcessor {
 
                 current = overlap + current;
             }
-
-            // 控制最大长度
-            if (current.length() > MAX_CHUNK_SIZE) {
-                current = current.substring(0, MAX_CHUNK_SIZE);
-            }
-
             result.add(current);
         }
 

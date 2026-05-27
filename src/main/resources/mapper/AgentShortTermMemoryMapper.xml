@@ -109,6 +109,49 @@
           AND conversation_id = #{conversationId}
     </select>
 
+    <select id="selectMaxMessageOrder" resultType="java.lang.Long">
+        SELECT COALESCE(MAX(message_order), 0)
+        FROM agent_short_term_memory
+        WHERE user_id = #{userId}
+          AND conversation_id = #{conversationId}
+          AND is_deleted = FALSE
+          AND (expired_at IS NULL OR expired_at > CURRENT_TIMESTAMP)
+    </select>
+
+    <select id="countMessagesInOrderRange" resultType="int">
+        SELECT COUNT(1)
+        FROM agent_short_term_memory
+        WHERE user_id = #{userId}
+          AND conversation_id = #{conversationId}
+          AND message_order BETWEEN #{startOrder} AND #{endOrder}
+          AND is_deleted = FALSE
+          AND (expired_at IS NULL OR expired_at > CURRENT_TIMESTAMP)
+    </select>
+
+    <select id="selectMessagesInOrderRange" resultMap="AgentShortTermMemoryResultMap">
+        SELECT
+            id,
+            user_id,
+            conversation_id,
+            role,
+            content,
+            token_count,
+            message_order,
+            metadata,
+            is_deleted,
+            expired_at,
+            created_at,
+            updated_at
+        FROM agent_short_term_memory
+        WHERE user_id = #{userId}
+          AND conversation_id = #{conversationId}
+          AND message_order BETWEEN #{startOrder} AND #{endOrder}
+          AND is_deleted = FALSE
+          AND (expired_at IS NULL OR expired_at > CURRENT_TIMESTAMP)
+        ORDER BY message_order ASC
+        LIMIT #{limit}
+    </select>
+
     <update id="logicalDeleteByConversation">
         UPDATE agent_short_term_memory
         SET is_deleted = TRUE,

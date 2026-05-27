@@ -39,4 +39,9 @@ public class AgentChatContext {
      * 当前会话内召回的短期记忆消息。
      */
     private List<AgentShortTermMemory> historyMessages;
+
+    /**
+     * 当前会话摘要
+     */
+    private String conversationSummary;
 }

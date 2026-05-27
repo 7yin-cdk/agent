@@ -12,6 +12,7 @@ import com.library.agent.enums.IntentType;
 import com.library.agent.llm.Assistant;
 import com.library.agent.llm.LlmService;
 import com.library.agent.llm.PromptBuilder;
+import com.library.agent.memory.ConversationSummaryService;
 import com.library.agent.memory.ShortTermMemoryService;
 import com.library.agent.rag.service.RagService;
 import com.library.agent.service.AgentService;
@@ -46,6 +47,7 @@ public class AgentServiceImpl implements AgentService {
     private final RagService ragService;
     private final ConversationService conversationService;
     private final ShortTermMemoryService shortTermMemoryService;
+    private final ConversationSummaryService conversationSummaryService;
     private final Assistant  assistant;
 
     /**
@@ -65,14 +67,24 @@ public class AgentServiceImpl implements AgentService {
                 conversationId,
                 ANSWER_HISTORY_LIMIT
         );
+        String conversationSummary = conversationSummaryService.getSummary(userId, conversationId);
         //意图识别
         IntentType intentType = identifyIntent(query, limitHistoryForIntent(historyMessages));
         //构建单次聊天上下文对象
-        AgentChatContext context = buildChatContext(userId, conversationId, query, intentType, historyMessages);
+        AgentChatContext context = buildChatContext(
+                userId,
+                conversationId,
+                query,
+                intentType,
+                historyMessages,
+                conversationSummary
+        );
         String answer = route(intentType, context);
         //保存本次聊天
         shortTermMemoryService.saveUserAndAssistantMessages(userId, conversationId, query, answer);
         conversationService.touchConversation(userId, conversationId, 2);
+        // 判断是否需要生成摘要
+        conversationSummaryService.triggerSummaryIfNeeded(userId, conversationId);
 
         ChatResponse response = new ChatResponse();
         response.setConversationId(conversationId);
@@ -99,10 +111,15 @@ public class AgentServiceImpl implements AgentService {
         IntentType safeIntentType = intentType == null ? IntentType.SIMPLE_CHAT : intentType;
 
         return switch (safeIntentType) {
-            case KNOWLEDGE_BASE -> ragService.query(context.getQuery(), context.getHistoryMessages());
+            case KNOWLEDGE_BASE -> ragService.query(
+                    context.getQuery(),
+                    context.getConversationSummary(),
+                    context.getHistoryMessages()
+            );
             case TOOL_CALL -> {
                 String toolPrompt = PromptBuilder.buildToolPrompt(
                         context.getQuery(),
+                        context.getConversationSummary(),
                         context.getHistoryMessages()
                 );
                 yield assistant.chat(toolPrompt);
@@ -110,6 +127,7 @@ public class AgentServiceImpl implements AgentService {
             case SIMPLE_CHAT -> {
                 String prompt = PromptBuilder.buildSimplePrompt(
                         context.getQuery(),
+                        context.getConversationSummary(),
                         context.getHistoryMessages()
                 );
                 yield llmService.chat(prompt);
@@ -196,7 +214,8 @@ public class AgentServiceImpl implements AgentService {
             String conversationId,
             String query,
             IntentType intentType,
-            List<AgentShortTermMemory> historyMessages
+            List<AgentShortTermMemory> historyMessages,
+            String conversationSummary
     ) {
         AgentChatContext context = new AgentChatContext();
         context.setUserId(userId);
@@ -204,6 +223,7 @@ public class AgentServiceImpl implements AgentService {
         context.setQuery(query);
         context.setIntentType(intentType);
         context.setHistoryMessages(historyMessages);
+        context.setConversationSummary(conversationSummary);
         return context;
     }
 

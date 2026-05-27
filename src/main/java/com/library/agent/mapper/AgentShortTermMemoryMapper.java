@@ -39,6 +39,26 @@ public interface AgentShortTermMemoryMapper {
             @Param("conversationId") String conversationId
     );
 
+    Long selectMaxMessageOrder(
+            @Param("userId") String userId,
+            @Param("conversationId") String conversationId
+    );
+
+    int countMessagesInOrderRange(
+            @Param("userId") String userId,
+            @Param("conversationId") String conversationId,
+            @Param("startOrder") Long startOrder,
+            @Param("endOrder") Long endOrder
+    );
+
+    List<AgentShortTermMemory> selectMessagesInOrderRange(
+            @Param("userId") String userId,
+            @Param("conversationId") String conversationId,
+            @Param("startOrder") Long startOrder,
+            @Param("endOrder") Long endOrder,
+            @Param("limit") Integer limit
+    );
+
     /**
      * 逻辑删除指定会话下的所有短期记忆消息。
      */

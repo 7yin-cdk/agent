@@ -86,6 +86,11 @@ public class RagServiceImpl implements RagService {
      */
     @Override
     public String query(String text, List<AgentShortTermMemory> historyMessages) {
+        return query(text, null, historyMessages);
+    }
+
+    @Override
+    public String query(String text, String conversationSummary, List<AgentShortTermMemory> historyMessages) {
         List<Float> embed = llmService.embed(text);
 
         // pgvector 查询使用 float[]，这里将模型返回的 List<Float> 转换成数组。
@@ -101,7 +106,7 @@ public class RagServiceImpl implements RagService {
             chunks.add(textChunk.getChunkText());
         }
 
-        String prompt = PromptBuilder.buildRagPrompt(text, historyMessages, chunks);
+        String prompt = PromptBuilder.buildRagPrompt(text, conversationSummary, historyMessages, chunks);
         return llmService.chat(prompt);
     }
 

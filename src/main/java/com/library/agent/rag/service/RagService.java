@@ -27,4 +27,6 @@ public interface RagService {
      * @return 大模型回答
      */
     String query(String question, List<AgentShortTermMemory> historyMessages);
+
+    String query(String question, String conversationSummary, List<AgentShortTermMemory> historyMessages);
 }

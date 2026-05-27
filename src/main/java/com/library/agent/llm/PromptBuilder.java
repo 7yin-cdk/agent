@@ -26,9 +26,18 @@ public final class PromptBuilder {
      * @return 组装后的完整 Prompt
      */
     public static String buildSimplePrompt(String userQuestion, List<AgentShortTermMemory> historyMessages) {
+        return buildSimplePrompt(userQuestion, null, historyMessages);
+    }
+
+    public static String buildSimplePrompt(
+            String userQuestion,
+            String conversationSummary,
+            List<AgentShortTermMemory> historyMessages
+    ) {
         StringBuilder prompt = new StringBuilder();
 
         appendBaseRole(prompt);
+        appendConversationSummary(prompt, conversationSummary);
         appendConversationHistory(prompt, historyMessages);
 
         prompt.append("### 任务定义\n");
@@ -58,9 +67,19 @@ public final class PromptBuilder {
             List<AgentShortTermMemory> historyMessages,
             List<String> ragTexts
     ) {
+        return buildRagPrompt(userQuestion, null, historyMessages, ragTexts);
+    }
+
+    public static String buildRagPrompt(
+            String userQuestion,
+            String conversationSummary,
+            List<AgentShortTermMemory> historyMessages,
+            List<String> ragTexts
+    ) {
         StringBuilder prompt = new StringBuilder();
 
         appendBaseRole(prompt);
+        appendConversationSummary(prompt, conversationSummary);
         appendConversationHistory(prompt, historyMessages);
         appendRagTexts(prompt, ragTexts);
 
@@ -87,12 +106,21 @@ public final class PromptBuilder {
      * @return 组装后的完整 Prompt
      */
     public static String buildToolPrompt(String userQuestion, List<AgentShortTermMemory> historyMessages) {
+        return buildToolPrompt(userQuestion, null, historyMessages);
+    }
+
+    public static String buildToolPrompt(
+            String userQuestion,
+            String conversationSummary,
+            List<AgentShortTermMemory> historyMessages
+    ) {
         StringBuilder prompt = new StringBuilder();
 
         prompt.append("### 角色定义与行为边界\n");
         prompt.append("你是一个具备工具调用能力的 AI 助手，需要结合当前会话历史理解用户要执行的任务。\n");
         prompt.append("如果需要调用工具，请根据用户真实意图选择合适工具；如果信息不足，请先说明缺少哪些参数。\n\n");
 
+        appendConversationSummary(prompt, conversationSummary);
         appendConversationHistory(prompt, historyMessages);
 
         prompt.append("### 任务定义\n");
@@ -147,6 +175,15 @@ public final class PromptBuilder {
         prompt.append("你是一个专业的 AI 助手，具备严谨的逻辑推理能力和准确的信息处理能力。\n");
         prompt.append("你必须基于提供的信息进行回答，不得编造事实。\n");
         prompt.append("如果信息不足，请明确说明，而不是猜测。\n\n");
+    }
+
+    private static void appendConversationSummary(StringBuilder prompt, String conversationSummary) {
+        prompt.append("### 会话长期摘要\n");
+        if (conversationSummary == null || conversationSummary.isBlank()) {
+            prompt.append("暂无会话摘要。\n\n");
+            return;
+        }
+        prompt.append(conversationSummary.trim()).append("\n\n");
     }
 
     /**

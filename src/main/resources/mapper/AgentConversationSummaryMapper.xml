@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.library.agent.mapper.AgentConversationSummaryMapper">
+
+    <resultMap id="AgentConversationSummaryResultMap"
+               type="com.library.agent.entity.AgentConversationSummary">
+        <id property="id" column="id"/>
+        <result property="userId" column="user_id"/>
+        <result property="conversationId" column="conversation_id"/>
+        <result property="summary" column="summary"/>
+        <result property="coveredMessageOrder" column="covered_message_order"/>
+        <result property="summaryVersion" column="summary_version"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <select id="selectByUserIdAndConversationId" resultMap="AgentConversationSummaryResultMap">
+        SELECT
+            id,
+            user_id,
+            conversation_id,
+            summary,
+            covered_message_order,
+            summary_version,
+            created_at,
+            updated_at
+        FROM agent_conversation_summary
+        WHERE user_id = #{userId}
+          AND conversation_id = #{conversationId}
+    </select>
+
+    <insert id="upsert"
+            parameterType="com.library.agent.entity.AgentConversationSummary">
+        INSERT INTO agent_conversation_summary
+        (
+            user_id,
+            conversation_id,
+            summary,
+            covered_message_order,
+            summary_version,
+            created_at,
+            updated_at
+        )
+        VALUES
+        (
+            #{userId},
+            #{conversationId},
+            #{summary},
+            COALESCE(#{coveredMessageOrder}, 0),
+            COALESCE(#{summaryVersion}, 1),
+            COALESCE(#{createdAt}, CURRENT_TIMESTAMP),
+            COALESCE(#{updatedAt}, CURRENT_TIMESTAMP)
+        )
+        ON CONFLICT (user_id, conversation_id)
+        DO UPDATE SET
+            summary = EXCLUDED.summary,
+            covered_message_order = EXCLUDED.covered_message_order,
+            summary_version = agent_conversation_summary.summary_version + 1,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE EXCLUDED.covered_message_order > agent_conversation_summary.covered_message_order
+    </insert>
+
+</mapper>
