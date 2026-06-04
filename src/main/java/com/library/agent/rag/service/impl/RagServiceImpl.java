@@ -154,8 +154,13 @@ public class RagServiceImpl implements RagService {
         for (TextChunk textChunk : textChunks) {
             chunks.add(textChunk.getChunkText());
         }
-
-        return PromptBuilder.buildRagPrompt(text, retrievalQuestion, conversationSummary, historyMessages, chunks);
+        //重排序，获取到重排序后的chunk的索引
+        List<Integer> rerankChunkIds = llmService.rerank(retrievalQuestion, chunks, 5, 60.0);
+        List<String> rerankChunks = new ArrayList<>();
+        for (Integer rerankChunkId : rerankChunkIds) {
+            rerankChunks.add(chunks.get(rerankChunkId));
+        }
+        return PromptBuilder.buildRagPrompt(text, retrievalQuestion, conversationSummary, historyMessages, rerankChunks);
     }
 
     private String normalizeRetrievalQuestion(String text, String rewrittenQuestion) {

@@ -31,15 +31,21 @@ public class LlmServiceImpl implements LlmService {
     @Value("${bailian.embedding-model}")
     private String embeddingModel;
 
-    private static final int EMBED_DIMENSIONS = 1536;
-
-    private final ChatModel toolChatModel;
-
     @Value("${bailian.chat-url}")
     private String chatUrl;
 
     @Value("${bailian.chat-model}")
     private String chatModel;
+
+    @Value("${bailian.rerank-url}")
+    private String rerankUrl;
+
+    @Value("${bailian.rerank-model:qwen3-rerank}")
+    private String rerankModel;
+
+    private static final int EMBED_DIMENSIONS = 1536;
+
+    private final ChatModel toolChatModel;
 
     @Value("${bailian.api-key}")
     private String apiKey;
@@ -362,6 +368,134 @@ public class LlmServiceImpl implements LlmService {
         }
 
         return embeddings.get(0);
+    }
+
+    @Override
+    public List<Integer> rerank(String query, List<String> documents, int topN, double minScore) {
+        if (query == null || query.trim().isEmpty()) {
+            throw new RuntimeException("Rerank query cannot be empty");
+        }
+        if (documents == null || documents.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        List<String> validDocuments = new ArrayList<>();
+        List<Integer> originalIndexes = new ArrayList<>();
+
+        for (int i = 0; i < documents.size(); i++) {
+            String document = documents.get(i);
+            if (document == null || document.trim().isEmpty()) {
+                continue;
+            }
+            validDocuments.add(document.trim());
+            originalIndexes.add(i);
+        }
+
+        if (validDocuments.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        int safeTopN = Math.min(Math.max(topN, 1), validDocuments.size());
+
+        try {
+            ObjectMapper objectMapper = new ObjectMapper();
+
+            URL url = new URL(rerankUrl);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Authorization", "Bearer " + apiKey);
+            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(60000);
+            conn.setDoOutput(true);
+
+            ObjectNode requestJson = objectMapper.createObjectNode();
+            requestJson.put("model", rerankModel);
+
+            ObjectNode input = objectMapper.createObjectNode();
+            input.put("query", query.trim());
+
+            ArrayNode documentArray = objectMapper.createArrayNode();
+            for (String document : validDocuments) {
+                documentArray.add(document);
+            }
+            input.set("documents", documentArray);
+            requestJson.set("input", input);
+
+            ObjectNode parameters = objectMapper.createObjectNode();
+            parameters.put("top_n", safeTopN);
+
+            // false 表示只返回 index + relevance_score，减少网络返回体。
+            // 因为我们本地已经有 documents，不需要模型再把文本返回一遍。
+            parameters.put("return_documents", false);
+            requestJson.set("parameters", parameters);
+
+            String requestBody = objectMapper.writeValueAsString(requestJson);
+
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(requestBody.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+
+            int code = conn.getResponseCode();
+
+            InputStream inputStream = (code >= 200 && code < 300)
+                    ? conn.getInputStream()
+                    : conn.getErrorStream();
+
+            StringBuilder response = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(inputStream, java.nio.charset.StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    response.append(line);
+                }
+            }
+
+            String responseStr = response.toString();
+            JsonNode root = objectMapper.readTree(responseStr);
+
+            if (root.has("error")) {
+                throw new RuntimeException("Rerank failed: " + root.get("error").toString());
+            }
+
+            if (code < 200 || code >= 300) {
+                throw new RuntimeException("Rerank request failed, HTTP status=" + code + ", response=" + responseStr);
+            }
+
+            JsonNode results = root.path("output").path("results");
+            if (!results.isArray()) {
+                throw new RuntimeException("Rerank output.results is empty or invalid: " + responseStr);
+            }
+
+            List<Integer> rerankedIndexes = new ArrayList<>();
+
+            for (JsonNode item : results) {
+                JsonNode indexNode = item.get("index");
+                JsonNode scoreNode = item.get("relevance_score");
+                if (indexNode == null || !indexNode.canConvertToInt()) {
+                    continue;
+                }
+                if (scoreNode == null || !scoreNode.isNumber()) {
+                    continue;
+                }
+                int validDocumentIndex = indexNode.asInt();
+                double relevanceScore = scoreNode.asDouble();
+                if (relevanceScore < minScore) {
+                    continue;
+                }
+                if (validDocumentIndex < 0 || validDocumentIndex >= originalIndexes.size()) {
+                    continue;
+                }
+
+                rerankedIndexes.add(originalIndexes.get(validDocumentIndex));
+            }
+
+            return rerankedIndexes;
+
+        } catch (Exception e) {
+            throw new RuntimeException("Qwen3 rerank failed", e);
+        }
     }
 
 

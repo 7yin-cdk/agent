@@ -41,4 +41,13 @@ public interface LlmService {
 //     * @return
 //     */
 //    String toolChat(String prompt);
+
+    /**
+     * 对召回到的文本重排序
+     * @param query 用户提问
+     * @param documents 多路召回的文本
+     * @param topN 最终保留的文本数
+     * @return 文档原始下标
+     */
+    List<Integer> rerank(String query, List<String> documents, int topN, double minScore);
 }
