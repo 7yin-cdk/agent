@@ -487,7 +487,6 @@ public class LlmServiceImpl implements LlmService {
                 if (validDocumentIndex < 0 || validDocumentIndex >= originalIndexes.size()) {
                     continue;
                 }
-
                 rerankedIndexes.add(originalIndexes.get(validDocumentIndex));
             }
 

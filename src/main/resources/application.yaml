@@ -38,10 +38,11 @@ bailian:
   tool-chat-url: https://dashscope.aliyuncs.com/compatible-mode/v1
   chat-url: https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
   chat-model: qwen-plus
-server:
-  port: 8088
   rerank-url: https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank
   rerank-model: qwen3-rerank
+
+server:
+  port: 8084
 
 rocketmq:
   name-server: 127.0.0.1:9876

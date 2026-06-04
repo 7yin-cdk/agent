@@ -155,7 +155,7 @@ public class RagServiceImpl implements RagService {
             chunks.add(textChunk.getChunkText());
         }
         //重排序，获取到重排序后的chunk的索引
-        List<Integer> rerankChunkIds = llmService.rerank(retrievalQuestion, chunks, 5, 60.0);
+        List<Integer> rerankChunkIds = llmService.rerank(retrievalQuestion, chunks, 5, 0.7);
         List<String> rerankChunks = new ArrayList<>();
         for (Integer rerankChunkId : rerankChunkIds) {
             rerankChunks.add(chunks.get(rerankChunkId));
