@@ -14,11 +14,14 @@ import com.library.agent.enums.IntentType;
 import com.library.agent.llm.Assistant;
 import com.library.agent.llm.LlmService;
 import com.library.agent.llm.PromptBuilder;
+import com.library.agent.llm.QueryRewriteResult;
+import com.library.agent.llm.QueryRewriteService;
 import com.library.agent.memory.ConversationSummaryService;
 import com.library.agent.memory.ShortTermMemoryService;
 import com.library.agent.rag.service.RagService;
 import com.library.agent.service.AgentService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -36,6 +39,7 @@ import java.util.function.Consumer;
  * <p>
  * 该类负责串联登录用户、会话、短期记忆、意图识别、路径路由和消息写回。
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AgentServiceImpl implements AgentService {
@@ -58,6 +62,7 @@ public class AgentServiceImpl implements AgentService {
     private final ShortTermMemoryService shortTermMemoryService;
     private final ConversationSummaryService conversationSummaryService;
     private final Assistant  assistant;
+    private final QueryRewriteService queryRewriteService;
 
     /**
      * 执行带会话的 Agent 聊天。
@@ -76,21 +81,31 @@ public class AgentServiceImpl implements AgentService {
                 conversationId,
                 ANSWER_HISTORY_LIMIT
         );
+        // 获取会话摘要
         String conversationSummary = conversationSummaryService.getSummary(userId, conversationId);
         //意图识别
         IntentType intentType = identifyIntent(query, limitHistoryForIntent(historyMessages));
+        QueryRewriteResult queryRewriteResult = rewriteQueryIfNeeded(query, intentType, conversationSummary, historyMessages);
         //构建单次聊天上下文对象
         AgentChatContext context = buildChatContext(
                 userId,
                 conversationId,
                 query,
+                queryRewriteResult.getRewrittenQuery(),
                 intentType,
                 historyMessages,
                 conversationSummary
         );
         String answer = route(intentType, context);
         //保存本次聊天
-        shortTermMemoryService.saveUserAndAssistantMessages(userId, conversationId, query, answer);
+        shortTermMemoryService.saveUserAndAssistantMessages(
+                userId,
+                conversationId,
+                query,
+                answer,
+                buildUserMessageMetadata(intentType, queryRewriteResult),
+                Map.of("intentType", intentType.name())
+        );
         conversationService.touchConversation(userId, conversationId, 2);
         // 判断是否需要生成摘要
         conversationSummaryService.triggerSummaryIfNeeded(userId, conversationId);
@@ -164,16 +179,20 @@ public class AgentServiceImpl implements AgentService {
         );
         String conversationSummary = conversationSummaryService.getSummary(userId, conversationId);
         IntentType intentType = identifyIntent(query, limitHistoryForIntent(historyMessages));
+        QueryRewriteResult queryRewriteResult = rewriteQueryIfNeeded(query, intentType, conversationSummary, historyMessages);
 
         sendEvent(emitter, "status", Map.of(
                 "conversationId", conversationId,
-                "intentType", intentType.name()
+                "intentType", intentType.name(),
+                "rewrittenQuery", queryRewriteResult.getRewrittenQuery(),
+                "queryRewritten", queryRewriteResult.isRewritten()
         ));
 
         AgentChatContext context = buildChatContext(
                 userId,
                 conversationId,
                 query,
+                queryRewriteResult.getRewrittenQuery(),
                 intentType,
                 historyMessages,
                 conversationSummary
@@ -186,7 +205,14 @@ public class AgentServiceImpl implements AgentService {
         });
 
         String finalAnswer = answer.toString();
-        shortTermMemoryService.saveUserAndAssistantMessages(userId, conversationId, query, finalAnswer);
+        shortTermMemoryService.saveUserAndAssistantMessages(
+                userId,
+                conversationId,
+                query,
+                finalAnswer,
+                buildUserMessageMetadata(intentType, queryRewriteResult),
+                Map.of("intentType", intentType.name())
+        );
         conversationService.touchConversation(userId, conversationId, 2);
         conversationSummaryService.triggerSummaryIfNeeded(userId, conversationId);
 
@@ -202,6 +228,7 @@ public class AgentServiceImpl implements AgentService {
         switch (safeIntentType) {
             case KNOWLEDGE_BASE -> ragService.queryStream(
                     context.getQuery(),
+                    context.getRewrittenQuery(),
                     context.getConversationSummary(),
                     context.getHistoryMessages(),
                     onDelta
@@ -241,11 +268,13 @@ public class AgentServiceImpl implements AgentService {
 
         IntentType ruleIntent = identifyByRules(query);
         if (ruleIntent != null) {
+            log.info("identifyByRules ruleIntent = {}", ruleIntent);
             return ruleIntent;
         }
 
         try {
             String result = llmService.chat(buildIntentPrompt(query, historyMessages));
+            log.info("LLM 意图识别结果： {}", result);
             return parseIntent(result);
         } catch (Exception e) {
             return IntentType.SIMPLE_CHAT;
@@ -308,6 +337,7 @@ public class AgentServiceImpl implements AgentService {
             Long userId,
             String conversationId,
             String query,
+            String rewrittenQuery,
             IntentType intentType,
             List<AgentShortTermMemory> historyMessages,
             String conversationSummary
@@ -316,6 +346,7 @@ public class AgentServiceImpl implements AgentService {
         context.setUserId(userId);
         context.setConversationId(conversationId);
         context.setQuery(query);
+        context.setRewrittenQuery(rewrittenQuery);
         context.setIntentType(intentType);
         context.setHistoryMessages(historyMessages);
         context.setConversationSummary(conversationSummary);
@@ -325,6 +356,29 @@ public class AgentServiceImpl implements AgentService {
     /**
      * 截取意图识别阶段需要的少量历史消息。
      */
+    private QueryRewriteResult rewriteQueryIfNeeded(
+            String query,
+            IntentType intentType,
+            String conversationSummary,
+            List<AgentShortTermMemory> historyMessages
+    ) {
+        if (intentType != IntentType.KNOWLEDGE_BASE) {
+            return QueryRewriteResult.unchanged(query);
+        }
+        return queryRewriteService.rewrite(query, conversationSummary, historyMessages);
+    }
+
+    private Map<String, Object> buildUserMessageMetadata(IntentType intentType, QueryRewriteResult queryRewriteResult) {
+        if (queryRewriteResult == null) {
+            return Map.of("intentType", intentType.name());
+        }
+        return Map.of(
+                "intentType", intentType.name(),
+                "rewrittenQuery", queryRewriteResult.getRewrittenQuery(),
+                "queryRewritten", queryRewriteResult.isRewritten()
+        );
+    }
+
     private List<AgentShortTermMemory> limitHistoryForIntent(List<AgentShortTermMemory> historyMessages) {
         if (historyMessages == null || historyMessages.isEmpty()) {
             return List.of();
@@ -340,8 +394,8 @@ public class AgentServiceImpl implements AgentService {
         String normalized = query.trim().toLowerCase(Locale.ROOT);
 
         String[] toolKeywords = {
-                "调用工具", "使用工具", "执行", "运行", "生成报告", "导出", "查询天气",
-                "天气", "计算", "帮我查", "帮我生成", "tool", "api"
+                "调用工具", "使用工具", "运行", "生成报告", "导出", "查询天气",
+                "天气", "计算", "帮我生成", "tool", "api"
         };
         for (String keyword : toolKeywords) {
             if (normalized.contains(keyword)) {
@@ -349,17 +403,41 @@ public class AgentServiceImpl implements AgentService {
             }
         }
 
-        String[] knowledgeKeywords = {
-                "知识库", "文档", "资料", "制度", "规则", "规定", "手册", "文件",
-                "根据", "参考", "rag", "检索"
+        String[] explicitKnowledgeKeywords = {
+                "知识库", "公司知识库", "内部文档", "内部资料", "内部制度", "内部规定", "内部规则",
+                "员工手册", "公司手册", "规章制度", "人员信息", "组织架构", "报销制度", "考勤制度",
+                "请假制度", "年假规定", "薪酬制度", "福利制度", "入职流程", "离职流程", "审批流程",
+                "rag", "检索知识库"
         };
-        for (String keyword : knowledgeKeywords) {
+        for (String keyword : explicitKnowledgeKeywords) {
             if (normalized.contains(keyword)) {
                 return IntentType.KNOWLEDGE_BASE;
             }
         }
 
+        String[] internalScopeKeywords = {
+                "公司", "内部", "本公司", "我们公司", "我司", "单位", "部门", "员工", "人员",
+                "同事", "组织", "人事", "hr", "行政", "财务", "报销", "考勤", "请假",
+                "年假", "入职", "离职", "审批", "合同", "薪酬", "福利"
+        };
+        String[] knowledgeTopicKeywords = {
+                "制度", "规定", "规则", "手册", "文档", "文件", "资料", "信息", "流程",
+                "政策", "规范", "联系人", "负责人", "架构"
+        };
+        if (containsAny(normalized, internalScopeKeywords) && containsAny(normalized, knowledgeTopicKeywords)) {
+            return IntentType.KNOWLEDGE_BASE;
+        }
+
         return null;
+    }
+
+    private boolean containsAny(String normalized, String[] keywords) {
+        for (String keyword : keywords) {
+            if (normalized.contains(keyword)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -368,9 +446,14 @@ public class AgentServiceImpl implements AgentService {
     private String buildIntentPrompt(String query, List<AgentShortTermMemory> historyMessages) {
         StringBuilder prompt = new StringBuilder();
         prompt.append("你是一个意图识别器。请判断用户问题属于以下哪一种意图：\n");
-        prompt.append("1. KNOWLEDGE_BASE：需要查询知识库、文档、资料、制度、规则后回答。只有用户问到文档，文件相关的问题才需要查询知识库git\n");
+        prompt.append("1. KNOWLEDGE_BASE：只有当用户问题明确指向公司内部制度、内部流程、内部资料、员工/人员/组织信息、行政人事财务等公司内部信息时才选择。\n");
         prompt.append("2. TOOL_CALL：需要调用外部工具、接口、数据库、计算器或执行动作。\n");
         prompt.append("3. SIMPLE_CHAT：普通聊天、解释概念、闲聊，或不需要知识库和工具的问题。\n\n");
+        prompt.append("### 判断边界\n");
+        prompt.append("- 不要因为问题里出现“文档、资料、制度、规则、规定、文件、手册”等词就直接选择 KNOWLEDGE_BASE。\n");
+        prompt.append("- 如果用户问的是通用知识、公共规则、编程文件、学习资料、概念解释、写作建议或普通闲聊，应选择 SIMPLE_CHAT。\n");
+        prompt.append("- 只有问题语义明确落在公司内部范围，或结合最近会话可确认是在追问公司内部信息时，才选择 KNOWLEDGE_BASE。\n");
+        prompt.append("- 如果用户只是要求执行动作、查询外部实时信息、调用接口或使用工具，应选择 TOOL_CALL。\n\n");
 
         prompt.append("### 最近会话\n");
         if (historyMessages == null || historyMessages.isEmpty()) {

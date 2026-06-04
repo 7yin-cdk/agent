@@ -3,6 +3,7 @@ package com.library.agent.memory;
 import com.library.agent.entity.AgentShortTermMemory;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Agent 短期记忆服务。
@@ -31,6 +32,8 @@ public interface ShortTermMemoryService {
      */
     void saveMessage(Long userId, String conversationId, String role, String content);
 
+    void saveMessage(Long userId, String conversationId, String role, String content, Map<String, Object> metadata);
+
     /**
      * 保存一次完整问答产生的用户消息和助手消息。
      *
@@ -40,4 +43,13 @@ public interface ShortTermMemoryService {
      * @param assistantMessage 助手回复
      */
     void saveUserAndAssistantMessages(Long userId, String conversationId, String userMessage, String assistantMessage);
+
+    void saveUserAndAssistantMessages(
+            Long userId,
+            String conversationId,
+            String userMessage,
+            String assistantMessage,
+            Map<String, Object> userMetadata,
+            Map<String, Object> assistantMetadata
+    );
 }

@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Agent 短期记忆服务实现。
@@ -61,6 +62,18 @@ public class ShortTermMemoryServiceImpl implements ShortTermMemoryService {
     @Override
     @Transactional
     public void saveMessage(Long userId, String conversationId, String role, String content) {
+        saveMessage(userId, conversationId, role, content, Map.of());
+    }
+
+    @Override
+    @Transactional
+    public void saveMessage(
+            Long userId,
+            String conversationId,
+            String role,
+            String content,
+            Map<String, Object> metadata
+    ) {
         if (userId == null || conversationId == null || conversationId.isBlank()) {
             return;
         }
@@ -76,7 +89,7 @@ public class ShortTermMemoryServiceImpl implements ShortTermMemoryService {
         memory.setContent(content);
         memory.setTokenCount(estimateTokenCount(content));
         memory.setMessageOrder(nextMessageOrder(userId, conversationId));
-        memory.setMetadata(new HashMap<>());
+        memory.setMetadata(metadata == null ? new HashMap<>() : new HashMap<>(metadata));
         memory.setDeleted(false);
         memory.setCreatedAt(now);
         memory.setUpdatedAt(now);
@@ -97,8 +110,21 @@ public class ShortTermMemoryServiceImpl implements ShortTermMemoryService {
             String userMessage,
             String assistantMessage
     ) {
-        saveMessage(userId, conversationId, ROLE_USER, userMessage);
-        saveMessage(userId, conversationId, ROLE_ASSISTANT, assistantMessage);
+        saveUserAndAssistantMessages(userId, conversationId, userMessage, assistantMessage, Map.of(), Map.of());
+    }
+
+    @Override
+    @Transactional
+    public void saveUserAndAssistantMessages(
+            Long userId,
+            String conversationId,
+            String userMessage,
+            String assistantMessage,
+            Map<String, Object> userMetadata,
+            Map<String, Object> assistantMetadata
+    ) {
+        saveMessage(userId, conversationId, ROLE_USER, userMessage, userMetadata);
+        saveMessage(userId, conversationId, ROLE_ASSISTANT, assistantMessage, assistantMetadata);
     }
 
     /**

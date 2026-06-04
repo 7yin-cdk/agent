@@ -5,6 +5,7 @@ import cn.hutool.core.lang.Snowflake;
 import cn.hutool.core.util.IdUtil;
 import com.library.agent.entity.TextChunk;
 import com.library.agent.entity.TextChunkVector;
+import com.library.agent.es.service.KeywordSearchService;
 import com.library.agent.llm.LlmService;
 import com.library.agent.mapper.TextChunkMapper;
 import com.library.agent.mapper.TextChunkVectorMapper;
@@ -36,6 +37,7 @@ public class RagAsyncProcessor {
     private static final int MAX_CHUNK_SIZE = 400;
     private static final int OVERLAP_SIZE = 50;
     private final TextChunkVectorMapper textChunkVectorMapper;
+    private final KeywordSearchService keywordSearchService;
     private final TextChunkMapper textChunkMapper;
     private final MinioClient minioClient;
     private final DocumentParser documentParser;
@@ -292,6 +294,7 @@ public class RagAsyncProcessor {
         // 批量入库
         textChunkMapper.batchInsert(entities);
         textChunkVectorMapper.batchInsert(vectorEntities);
+        keywordSearchService.indexChunks(entities);
 
         return chunkIds;
     }

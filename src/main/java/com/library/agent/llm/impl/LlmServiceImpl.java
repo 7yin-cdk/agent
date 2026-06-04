@@ -161,7 +161,7 @@ public class LlmServiceImpl implements LlmService {
 
             ObjectNode systemMessage = objectMapper.createObjectNode();
             systemMessage.put("role", "system");
-            systemMessage.put("content", "You are a careful knowledge base assistant. Answer only from the provided context and do not fabricate.");
+            systemMessage.put("content", "你是一个企业内部 AI 助手。只有当用户提示词中明确包含“参考资料”或“Reference Materials”部分时，才将当前问题视为知识库问答，并严格依据参考资料回答；如果用户输入中没有参考资料这几个字，则按普通问答处理，可以基于你的通用预训练知识正常回答。不要编造事实、工具结果或文档内容。");
             messages.add(systemMessage);
 
             ObjectNode userMessage = objectMapper.createObjectNode();

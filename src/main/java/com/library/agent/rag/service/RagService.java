@@ -31,8 +31,23 @@ public interface RagService {
 
     String query(String question, String conversationSummary, List<AgentShortTermMemory> historyMessages);
 
+    String query(
+            String question,
+            String rewrittenQuestion,
+            String conversationSummary,
+            List<AgentShortTermMemory> historyMessages
+    );
+
     void queryStream(
             String question,
+            String conversationSummary,
+            List<AgentShortTermMemory> historyMessages,
+            Consumer<String> onDelta
+    );
+
+    void queryStream(
+            String question,
+            String rewrittenQuestion,
             String conversationSummary,
             List<AgentShortTermMemory> historyMessages,
             Consumer<String> onDelta

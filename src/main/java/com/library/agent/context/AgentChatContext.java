@@ -31,6 +31,11 @@ public class AgentChatContext {
     private String query;
 
     /**
+     * 用于检索召回的改写后问题；回答阶段仍以 query 作为用户原始问题。
+     */
+    private String rewrittenQuery;
+
+    /**
      * 本轮问题识别出的意图类型。
      */
     private IntentType intentType;

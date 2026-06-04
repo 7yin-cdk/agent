@@ -5,6 +5,7 @@ import com.library.agent.MQ.producer.RagIngestProducer;
 import com.library.agent.entity.AgentShortTermMemory;
 import com.library.agent.entity.FileMetadata;
 import com.library.agent.entity.TextChunk;
+import com.library.agent.es.service.KeywordSearchService;
 import com.library.agent.llm.LlmService;
 import com.library.agent.llm.PromptBuilder;
 import com.library.agent.mapper.FileMetadataMapper;
@@ -41,6 +42,7 @@ public class RagServiceImpl implements RagService {
     private final LlmService llmService;
     private final TextChunkVectorMapper textChunkVectorMapper;
     private final TextChunkMapper textChunkMapper;
+    private final KeywordSearchService keywordSearchService;
 
     /**
      * MinIO 存储桶名称。
@@ -92,8 +94,18 @@ public class RagServiceImpl implements RagService {
 
     @Override
     public String query(String text, String conversationSummary, List<AgentShortTermMemory> historyMessages) {
+        return query(text, text, conversationSummary, historyMessages);
+    }
+
+    @Override
+    public String query(
+            String text,
+            String rewrittenQuestion,
+            String conversationSummary,
+            List<AgentShortTermMemory> historyMessages
+    ) {
         StringBuilder answer = new StringBuilder();
-        queryStream(text, conversationSummary, historyMessages, answer::append);
+        queryStream(text, rewrittenQuestion, conversationSummary, historyMessages, answer::append);
         return answer.toString();
     }
 
@@ -104,27 +116,54 @@ public class RagServiceImpl implements RagService {
             List<AgentShortTermMemory> historyMessages,
             Consumer<String> onDelta
     ) {
-        String prompt = buildRagPrompt(text, conversationSummary, historyMessages);
+        queryStream(text, text, conversationSummary, historyMessages, onDelta);
+    }
+
+    @Override
+    public void queryStream(
+            String text,
+            String rewrittenQuestion,
+            String conversationSummary,
+            List<AgentShortTermMemory> historyMessages,
+            Consumer<String> onDelta
+    ) {
+        String prompt = buildRagPrompt(text, rewrittenQuestion, conversationSummary, historyMessages);
         llmService.chatStream(prompt, onDelta);
     }
 
-    private String buildRagPrompt(String text, String conversationSummary, List<AgentShortTermMemory> historyMessages) {
-        List<Float> embed = llmService.embed(text);
+    private String buildRagPrompt(
+            String text,
+            String rewrittenQuestion,
+            String conversationSummary,
+            List<AgentShortTermMemory> historyMessages
+    ) {
+        String retrievalQuestion = normalizeRetrievalQuestion(text, rewrittenQuestion);
+        List<Float> embed = llmService.embed(retrievalQuestion);
 
         // pgvector 查询使用 float[]，这里将模型返回的 List<Float> 转换成数组。
         float[] vector = new float[embed.size()];
         for (int i = 0; i < embed.size(); i++) {
             vector[i] = embed.get(i);
         }
-
-        List<Long> chunkIds = textChunkVectorMapper.selectTopKChunkIds(vector, 5);
+        //向量检索出TopK
+        List<Long> chunkIds = textChunkVectorMapper.selectTopKChunkIds(vector, 10);
+        //关键词检索出TopK
+        List<Long> keywordChunkIds = keywordSearchService.searchChunkIds(retrievalQuestion, 10);
+        // TODO RFF融合+重排序
         List<TextChunk> textChunks = textChunkMapper.selectByChunkIds(chunkIds);
         List<String> chunks = new ArrayList<>();
         for (TextChunk textChunk : textChunks) {
             chunks.add(textChunk.getChunkText());
         }
 
-        return PromptBuilder.buildRagPrompt(text, conversationSummary, historyMessages, chunks);
+        return PromptBuilder.buildRagPrompt(text, retrievalQuestion, conversationSummary, historyMessages, chunks);
+    }
+
+    private String normalizeRetrievalQuestion(String text, String rewrittenQuestion) {
+        if (rewrittenQuestion == null || rewrittenQuestion.isBlank()) {
+            return text;
+        }
+        return rewrittenQuestion.trim();
     }
 
     /**
