@@ -22,9 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.function.Consumer;
 
 /**
@@ -146,10 +144,11 @@ public class RagServiceImpl implements RagService {
             vector[i] = embed.get(i);
         }
         //向量检索出TopK
-        List<Long> chunkIds = textChunkVectorMapper.selectTopKChunkIds(vector, 10);
+        List<Long> vectorIds = textChunkVectorMapper.selectTopKChunkIds(vector, 20);
         //关键词检索出TopK
-        List<Long> keywordChunkIds = keywordSearchService.searchChunkIds(retrievalQuestion, 10);
-        // TODO RFF融合+重排序
+        List<Long> keywordChunkIds = keywordSearchService.searchChunkIds(retrievalQuestion, 20);
+        //取RFF倒排后的TopK
+        List<Long> chunkIds = mergeByRrf(vectorIds, keywordChunkIds, 10);
         List<TextChunk> textChunks = textChunkMapper.selectByChunkIds(chunkIds);
         List<String> chunks = new ArrayList<>();
         for (TextChunk textChunk : textChunks) {
@@ -193,5 +192,35 @@ public class RagServiceImpl implements RagService {
         );
 
         return objectName;
+    }
+
+    /**
+     * RFF倒排算法取混合检索后的TopK
+     * @param vectorIds 向量检索的文档id
+     * @param keywordIds 关键词检索的文档id
+     * @param limit 最终需要的TopK
+     * @return
+     */
+    private List<Long> mergeByRrf(List<Long> vectorIds, List<Long> keywordIds, int limit) {
+        Map<Long, Double> scores = new LinkedHashMap<>();
+        addRrfScores(scores, vectorIds);
+        addRrfScores(scores, keywordIds);
+
+        return scores.entrySet().stream()
+                .sorted(Map.Entry.<Long, Double>comparingByValue().reversed())
+                .limit(limit)
+                .map(Map.Entry::getKey)
+                .toList();
+    }
+
+    /**
+     * 为文档赋RFF分
+     * @param scores
+     * @param ids
+     */
+    private void addRrfScores(Map<Long, Double> scores, List<Long> ids) {
+        for (int i = 0; i < ids.size(); i++) {
+            scores.merge(ids.get(i), 1.0 / (60 + i + 1), Double::sum);
+        }
     }
 }
