@@ -3,6 +3,7 @@ package com.library.agent.tool;
 import cn.hutool.http.HttpUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import org.springframework.stereotype.Component;
 
@@ -36,7 +37,7 @@ public class WeatherTool {
      * 查询天气
      */
     @Tool("根据城市名称查询当前天气")
-    public String getWeather(String city) {
+    public String getWeather(@P(value = "城市名称，例如：北京、上海、杭州") String city) {
 
         try {
 

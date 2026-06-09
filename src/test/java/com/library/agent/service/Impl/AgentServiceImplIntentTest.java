@@ -2,9 +2,9 @@ package com.library.agent.service.Impl;
 
 import com.library.agent.conversation.service.ConversationService;
 import com.library.agent.enums.IntentType;
-import com.library.agent.llm.Assistant;
 import com.library.agent.llm.LlmService;
 import com.library.agent.llm.QueryRewriteService;
+import com.library.agent.llm.ToolCallingService;
 import com.library.agent.memory.ConversationSummaryService;
 import com.library.agent.memory.ShortTermMemoryService;
 import com.library.agent.rag.service.RagService;
@@ -79,7 +79,7 @@ class AgentServiceImplIntentTest {
                 mock(ConversationService.class),
                 mock(ShortTermMemoryService.class),
                 mock(ConversationSummaryService.class),
-                mock(Assistant.class),
+                mock(ToolCallingService.class),
                 mock(QueryRewriteService.class)
         );
     }

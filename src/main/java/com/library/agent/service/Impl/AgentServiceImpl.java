@@ -11,11 +11,11 @@ import com.library.agent.dto.ChatRequest;
 import com.library.agent.dto.ChatResponse;
 import com.library.agent.entity.AgentShortTermMemory;
 import com.library.agent.enums.IntentType;
-import com.library.agent.llm.Assistant;
 import com.library.agent.llm.LlmService;
 import com.library.agent.llm.PromptBuilder;
 import com.library.agent.llm.QueryRewriteResult;
 import com.library.agent.llm.QueryRewriteService;
+import com.library.agent.llm.ToolCallingService;
 import com.library.agent.memory.ConversationSummaryService;
 import com.library.agent.memory.ShortTermMemoryService;
 import com.library.agent.rag.service.RagService;
@@ -61,7 +61,7 @@ public class AgentServiceImpl implements AgentService {
     private final ConversationService conversationService;
     private final ShortTermMemoryService shortTermMemoryService;
     private final ConversationSummaryService conversationSummaryService;
-    private final Assistant  assistant;
+    private final ToolCallingService toolCallingService;
     private final QueryRewriteService queryRewriteService;
 
     /**
@@ -119,7 +119,6 @@ public class AgentServiceImpl implements AgentService {
     @Override
     public SseEmitter chatStream(ChatRequest request) {
         validateChatRequest(request);
-
         UserContext userContext = UserContextHolder.get();
         if (userContext == null || userContext.getUserId() == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
@@ -239,7 +238,7 @@ public class AgentServiceImpl implements AgentService {
                         context.getConversationSummary(),
                         context.getHistoryMessages()
                 );
-                onDelta.accept(assistant.chat(toolPrompt));
+                onDelta.accept(toolCallingService.chatWithTools(context, toolPrompt));
             }
             case SIMPLE_CHAT -> {
                 String prompt = PromptBuilder.buildSimplePrompt(
