@@ -5,6 +5,6 @@ package com.library.agent.enums;
  */
 public enum IntentType {
     KNOWLEDGE_BASE,
-    TOOL_CALL,
+    COMPLEX_TASK,
     SIMPLE_CHAT
 }

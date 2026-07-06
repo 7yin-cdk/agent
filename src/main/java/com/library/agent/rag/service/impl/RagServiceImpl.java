@@ -144,11 +144,11 @@ public class RagServiceImpl implements RagService {
             vector[i] = embed.get(i);
         }
         //向量检索出TopK
-        List<Long> vectorIds = textChunkVectorMapper.selectTopKChunkIds(vector, 20);
+        List<Long> vectorIds = textChunkVectorMapper.selectTopKChunkIds(vector, 100);
         //关键词检索出TopK
-        List<Long> keywordChunkIds = keywordSearchService.searchChunkIds(retrievalQuestion, 20);
+        List<Long> keywordChunkIds = keywordSearchService.searchChunkIds(retrievalQuestion, 100);
         //取RFF倒排后的TopK
-        List<Long> chunkIds = mergeByRrf(vectorIds, keywordChunkIds, 10);
+        List<Long> chunkIds = mergeByRrf(vectorIds, keywordChunkIds, 80);
         List<TextChunk> textChunks = textChunkMapper.selectByChunkIds(chunkIds);
         List<String> chunks = new ArrayList<>();
         for (TextChunk textChunk : textChunks) {

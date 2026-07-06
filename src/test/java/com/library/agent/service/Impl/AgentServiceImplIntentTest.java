@@ -34,7 +34,7 @@ class AgentServiceImplIntentTest {
     }
 
     @Test
-    void identifiesInternalLookupQuestionAsKnowledgeBaseInsteadOfToolCall() {
+    void identifiesInternalLookupQuestionAsKnowledgeBaseInsteadOfComplexTask() {
         LlmService llmService = mock(LlmService.class);
         AgentServiceImpl agentService = newAgentService(llmService);
 

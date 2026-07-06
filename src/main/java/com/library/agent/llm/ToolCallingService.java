@@ -4,5 +4,5 @@ import com.library.agent.context.AgentChatContext;
 
 public interface ToolCallingService {
 
-    String chatWithTools(AgentChatContext context, String prompt);
+    String chatWithTasks(AgentChatContext context, String prompt);
 }

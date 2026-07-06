@@ -64,7 +64,6 @@ public class WeatherTool {
             if (now == null) {
                 return "天气查询失败";
             }
-
             String temp = now.get("temp").asText();
             String text = now.get("text").asText();
             String humidity = now.get("humidity").asText();

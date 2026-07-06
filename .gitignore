@@ -33,3 +33,6 @@ build/
 .vscode/
 /broker.conf
 /src/main/resources/static/rag.html
+
+### 忽略本地配置文件 ###
+/src/main/resources/application.yaml

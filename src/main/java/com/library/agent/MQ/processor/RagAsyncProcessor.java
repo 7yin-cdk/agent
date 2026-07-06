@@ -34,8 +34,8 @@ public class RagAsyncProcessor {
             "，", ","
     };
 
-    private static final int MAX_CHUNK_SIZE = 400;
-    private static final int OVERLAP_SIZE = 50;
+    private static final int MAX_CHUNK_SIZE = 800;
+    private static final int OVERLAP_SIZE = 100;
     private final TextChunkVectorMapper textChunkVectorMapper;
     private final KeywordSearchService keywordSearchService;
     private final TextChunkMapper textChunkMapper;

@@ -35,7 +35,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ToolCallingServiceImpl implements ToolCallingService {
 
-    private static final int MAX_REACT_STEPS = 5;
+    private static final int MAX_REACT_STEPS = 10;
     private static final int REACT_HISTORY_LIMIT = 8;
     private static final String APPLICATION_PACKAGE_PREFIX = "com.library.agent";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -45,6 +45,9 @@ public class ToolCallingServiceImpl implements ToolCallingService {
 
     private final Map<String, RegisteredTool> registeredTools = new LinkedHashMap<>();
 
+    /**
+     * 在Spring容器启动前注册工具
+     */
     @PostConstruct
     public void registerTools() {
         Map<String, Object> beans = applicationContext.getBeansOfType(Object.class, false, false);
@@ -80,21 +83,37 @@ public class ToolCallingServiceImpl implements ToolCallingService {
     }
 
     @Override
-    public String chatWithTools(AgentChatContext context, String prompt) {
+    public String chatWithTasks(AgentChatContext context, String reactPrompt) {
         if (registeredTools.isEmpty()) {
-            return chatModel.chat(userQuestion(context, prompt));
+            return chatModel.chat(userQuestion(context, reactPrompt));
         }
-
         List<ReActStep> steps = new ArrayList<>();
         Object memoryId = context == null ? null : context.getConversationId();
 
         for (int stepNumber = 1; stepNumber <= MAX_REACT_STEPS; stepNumber++) {
-            String reactPrompt = buildReActPrompt(context, prompt, steps);
+            // 在Prompt中增加ReAct历史
+            StringBuilder builder = new StringBuilder();
+            appendReActHistory(builder,steps);
+            String finalPrompt = reactPrompt.replace("{{react_history}}", builder.toString());
+            log.info("""
+                    
+                    ==================== ReAct NEXT INPUT step={} ====================
+                    {}
+                    ================== END ReAct NEXT INPUT step={} ==================
+                    """, stepNumber, finalPrompt, stepNumber);
+
             ChatResponse response = chatModel.chat(ChatRequest.builder()
-                    .messages(buildReActMessages(reactPrompt))
+                    .messages(buildReActMessages(finalPrompt))
                     .build());
 
             String modelOutput = response.aiMessage() == null ? null : response.aiMessage().text();
+            log.info("""
+                    
+                    =================== ReAct MODEL OUTPUT step={} ===================
+                    {}
+                    ================= END ReAct MODEL OUTPUT step={} =================
+                    """, stepNumber, modelOutput, stepNumber);
+
             ReActDecision decision = parseDecision(modelOutput);
             log.info("ReAct decision, step={}, type={}, thought={}", stepNumber, decision.type(), decision.thought());
 
@@ -103,8 +122,20 @@ public class ToolCallingServiceImpl implements ToolCallingService {
                 return answer == null || answer.isBlank() ? "Tool task finished, but no answer was returned." : answer;
             }
 
+            ToolCallValidationResult validationResult = validateToolAction(decision.tool());
+            if (!validationResult.ok()) {
+                return validationResult.message();
+            }
+
             ToolExecutionRequest toolRequest = toToolExecutionRequest(decision.tool());
             ReActObservation observation = executeTool(toolRequest, memoryId);
+            log.info("""
+                    
+                    ================= ReAct TOOL OBSERVATION step={} =================
+                    action: {}
+                    observation: {}
+                    =============== END ReAct TOOL OBSERVATION step={} ===============
+                    """, stepNumber, actionToJson(decision.tool()), toJson(observation), stepNumber);
             steps.add(new ReActStep(stepNumber, decision.thought(), decision.tool(), observation));
         }
 
@@ -127,7 +158,7 @@ public class ToolCallingServiceImpl implements ToolCallingService {
     private String buildReActPrompt(AgentChatContext context, String prompt, List<ReActStep> steps) {
         StringBuilder builder = new StringBuilder();
         builder.append("### Task\n");
-        builder.append("Decide the next ReAct step for the user request.\n\n");
+        builder.append("Decide the next ReAct step for the user request.Tools can only be invoked with parameters explicitly provided by the user.\n\n");
 
         builder.append("### Current user question\n");
         builder.append(userQuestion(context, prompt)).append("\n\n");
@@ -157,6 +188,9 @@ public class ToolCallingServiceImpl implements ToolCallingService {
                     "name": "registered tool name",
                     "arguments": {
                       "argumentName": "argumentValue"
+                    },
+                    "argument_sources": {
+                      "argumentName": "EXPLICIT_CURRENT or REFERENCED_CURRENT or HISTORY_ONLY"
                     }
                   },
                   "finish": null
@@ -172,12 +206,38 @@ public class ToolCallingServiceImpl implements ToolCallingService {
                   }
                 }
 
-                Rules:
-                - Use type=tool when a registered tool is needed.
-                - Use type=finish when enough information is available, or when required parameters are missing and the user must clarify.
-                - tool.name must be one of Available tools.
-                - tool.arguments must match the selected tool schema.
-                - Do not include markdown fences or text outside the JSON object.
+Rules:
+- Use type=tool when a registered tool is needed.
+- Use type=finish when enough information is available, or when required parameters are missing and the user must clarify.
+- tool.name must be one of Available tools.
+- tool.arguments must match the selected tool schema.
+- Every key in tool.arguments must have the same key in tool.argument_sources.
+
+- Each argument source must be exactly one of:
+  - EXPLICIT_CURRENT
+  - REFERENCED_CURRENT
+  - HISTORY_ONLY
+
+- Use EXPLICIT_CURRENT when the argument value is explicitly stated in the Current user question.
+
+- Use REFERENCED_CURRENT when the argument value is not explicitly stated, but the Current user question contains a reference, pronoun, or other expression that clearly refers to the value.
+  Examples:
+  - History: "北京天气怎么样"
+    Current: "那它明天呢"
+    city -> REFERENCED_CURRENT
+  - History: "介绍一下Spring Boot"
+    Current: "它有什么优缺点"
+    topic -> REFERENCED_CURRENT
+
+- Use HISTORY_ONLY when the argument value is not mentioned or referenced in the Current user question and can only be obtained from Conversation summary or Recent conversation history.
+
+- A parameter is considered provided by the user in the current turn if its source is EXPLICIT_CURRENT or REFERENCED_CURRENT.
+
+- A parameter is NOT considered provided by the user in the current turn if its source is HISTORY_ONLY.
+
+- If any required tool parameter is HISTORY_ONLY, do not invoke the tool. Instead, use type=finish and ask the user to explicitly provide or confirm the missing parameter.
+
+- Do not include markdown fences or text outside the JSON object.
                 """);
         return builder.toString();
     }
@@ -279,7 +339,12 @@ public class ToolCallingServiceImpl implements ToolCallingService {
         String arguments = argumentsNode == null || argumentsNode.isNull()
                 ? "{}"
                 : OBJECT_MAPPER.writeValueAsString(argumentsNode);
-        return new ReActToolAction(name, arguments);
+
+        JsonNode argumentSourcesNode = toolNode.get("argument_sources");
+        String argumentSources = argumentSourcesNode == null || argumentSourcesNode.isNull()
+                ? "{}"
+                : OBJECT_MAPPER.writeValueAsString(argumentSourcesNode);
+        return new ReActToolAction(name, arguments, argumentSources);
     }
 
     private ToolExecutionRequest toToolExecutionRequest(ReActToolAction action) {
@@ -288,6 +353,183 @@ public class ToolCallingServiceImpl implements ToolCallingService {
                 .name(action.name())
                 .arguments(action.arguments())
                 .build();
+    }
+
+    private ToolCallValidationResult validateToolAction(ReActToolAction action) {
+
+        // 1. Tool Action不能为空
+        if (action == null) {
+            return ToolCallValidationResult.reject(
+                    "Tool action is missing."
+            );
+        }
+
+        // 2. 解析 arguments
+        JsonNode arguments =
+                readObjectNode(action.arguments(), "tool.arguments");
+
+        // 3. 解析 argument_sources
+        JsonNode argumentSources =
+                readObjectNode(action.argumentSources(), "tool.argument_sources");
+
+        // 4. arguments 与 argument_sources必须拥有完全相同的key
+        Map<String, JsonNode> argumentMap = new LinkedHashMap<>();
+        arguments.fields().forEachRemaining(
+                entry -> argumentMap.put(entry.getKey(), entry.getValue())
+        );
+
+        Map<String, JsonNode> sourceMap = new LinkedHashMap<>();
+        argumentSources.fields().forEachRemaining(
+                entry -> sourceMap.put(entry.getKey(), entry.getValue())
+        );
+
+        if (!argumentMap.keySet().equals(sourceMap.keySet())) {
+            return ToolCallValidationResult.reject(
+                    "tool.arguments and tool.argument_sources must contain exactly the same keys."
+            );
+        }
+
+        // 5. 校验必填参数
+        for (String requiredArgument : requiredArgumentNames(action.name())) {
+
+            JsonNode argumentValue = arguments.get(requiredArgument);
+
+            // 参数不存在
+            if (argumentValue == null || argumentValue.isNull()) {
+                return ToolCallValidationResult.reject(
+                        clarificationMessage(requiredArgument)
+                );
+            }
+
+            // 参数为空字符串
+            if (argumentValue.isValueNode()
+                    && argumentValue.asText("").isBlank()) {
+
+                return ToolCallValidationResult.reject(
+                        clarificationMessage(requiredArgument)
+                );
+            }
+
+            // 校验必填参数的source
+            JsonNode sourceNode = argumentSources.get(requiredArgument);
+
+            if (sourceNode == null
+                    || sourceNode.isNull()
+                    || sourceNode.asText("").isBlank()) {
+
+                return ToolCallValidationResult.reject(
+                        clarificationMessage(requiredArgument)
+                );
+            }
+
+            String source =
+                    sourceNode.asText("")
+                            .trim()
+                            .toUpperCase();
+
+            // source必须是合法枚举值
+            if (!source.equals("EXPLICIT_CURRENT")
+                    && !source.equals("REFERENCED_CURRENT")
+                    && !source.equals("HISTORY_ONLY")) {
+
+                return ToolCallValidationResult.reject(
+                        "Invalid argument source for parameter: "
+                                + requiredArgument
+                                + ". Allowed values are "
+                                + "[EXPLICIT_CURRENT, REFERENCED_CURRENT, HISTORY_ONLY]."
+                );
+            }
+
+            // 核心业务规则
+            // required参数不能只来自历史
+            if ("HISTORY_ONLY".equals(source)) {
+
+                return ToolCallValidationResult.reject(
+                        clarificationMessage(requiredArgument)
+                );
+            }
+        }
+
+        // 全部通过
+        return ToolCallValidationResult.allow();
+    }
+
+    private List<String> requiredArgumentNames(String toolName) {
+        RegisteredTool registeredTool = registeredTools.get(toolName);
+        if (registeredTool == null || registeredTool.specification() == null) {
+            return List.of();
+        }
+
+        try {
+            JsonNode specificationJson = OBJECT_MAPPER.readTree(registeredTool.specification().toJson());
+            JsonNode requiredNode = findFirstArrayField(specificationJson, "required");
+            if (requiredNode == null || requiredNode.isEmpty()) {
+                return List.of();
+            }
+
+            List<String> requiredNames = new ArrayList<>();
+            for (JsonNode node : requiredNode) {
+                if (node != null && node.isTextual() && !node.asText().isBlank()) {
+                    requiredNames.add(node.asText());
+                }
+            }
+            return requiredNames;
+        } catch (Exception e) {
+            log.warn("Failed to read required arguments from tool specification, tool={}", toolName, e);
+            return List.of();
+        }
+    }
+
+    private JsonNode findFirstArrayField(JsonNode node, String fieldName) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        JsonNode directValue = node.get(fieldName);
+        if (directValue != null && directValue.isArray()) {
+            return directValue;
+        }
+        if (node.isObject()) {
+            for (var fields = node.fields(); fields.hasNext(); ) {
+                JsonNode found = findFirstArrayField(fields.next().getValue(), fieldName);
+                if (found != null) {
+                    return found;
+                }
+            }
+        } else if (node.isArray()) {
+            for (JsonNode child : node) {
+                JsonNode found = findFirstArrayField(child, fieldName);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
+    private JsonNode readObjectNode(String json, String fieldName) {
+        try {
+            JsonNode node = OBJECT_MAPPER.readTree(json == null || json.isBlank() ? "{}" : json);
+            if (!node.isObject()) {
+                throw new IllegalArgumentException(fieldName + " must be a JSON object");
+            }
+            return node;
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to parse " + fieldName + ": " + json, e);
+        }
+    }
+
+    private String normalizeForEvidence(String text) {
+        if (text == null) {
+            return "";
+        }
+        return text.trim()
+                .replaceAll("\\s+", "")
+                .toLowerCase();
+    }
+
+    private String clarificationMessage(String argumentName) {
+        return "Missing required tool parameter from the current user input: " + argumentName
+                + ". Please provide this parameter explicitly.";
     }
 
     private ReActObservation executeTool(ToolExecutionRequest toolRequest, Object memoryId) {
@@ -361,6 +603,7 @@ public class ToolCallingServiceImpl implements ToolCallingService {
             Map<String, Object> actionMap = new LinkedHashMap<>();
             actionMap.put("name", action.name());
             actionMap.put("arguments", arguments);
+            actionMap.put("argument_sources", OBJECT_MAPPER.readTree(action.argumentSources()));
             return OBJECT_MAPPER.writeValueAsString(actionMap);
         } catch (Exception e) {
             return toJson(action);
@@ -387,7 +630,7 @@ public class ToolCallingServiceImpl implements ToolCallingService {
         }
     }
 
-    private record ReActToolAction(String name, String arguments) {
+    private record ReActToolAction(String name, String arguments, String argumentSources) {
     }
 
     private record ReActFinish(String answer) {
@@ -397,5 +640,16 @@ public class ToolCallingServiceImpl implements ToolCallingService {
     }
 
     private record ReActObservation(boolean success, String content, String error) {
+    }
+
+    private record ToolCallValidationResult(boolean ok, String message) {
+
+        private static ToolCallValidationResult allow() {
+            return new ToolCallValidationResult(true, null);
+        }
+
+        private static ToolCallValidationResult reject(String message) {
+            return new ToolCallValidationResult(false, message);
+        }
     }
 }

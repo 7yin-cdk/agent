@@ -1,0 +1,56 @@
+spring:
+  application:
+    name: Agent
+  datasource:
+    url: jdbc:postgresql://localhost:5432/rag_db #填你的数据库url
+    username: your_username #填你的用户名
+    password: your_password #填你的密码
+    driver-class-name: org.postgresql.Driver
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 100MB
+  data:
+    redis:
+      host: localhost #填你的ip地址
+      port: 6379 #填你的端口
+      database: 0
+      timeout: 3000ms
+  elasticsearch:
+    uris: http://localhost:9200
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.library.agent.entity
+  configuration:
+    map-underscore-to-camel-case: true
+
+minio:
+  endpoint: http://localhost:9000 #填你的minio地址
+  access-key:  your_access-key #填你的
+  secret-key:  your_secret-key #填你的
+  bucket: rag-bucket #填你的bucket
+
+bailian:
+  api-key: your_api-key  #你的百炼平台的api-key
+  embedding-url: your_embedding-url #你的向量模型url
+  embedding-model: your_embedding-model #你的向量模型
+  tool-chat-url: your_tool-chat-url #你的工具聊天模型
+  chat-url: your_chat-url #你的chat模型url
+  chat-model: your_chat-model #你的chat模型
+  rerank-url: your_rerank-url #你的rerank模型url
+  rerank-model: your_rerank-model #你的rerankmodel
+
+server:
+  port: 8084
+
+rocketmq:
+  name-server: your_url #你的rocketmq的url
+  producer:
+    group: agent-producer-group
+    send-message-timeout: 3000
+
+auth:
+  token:
+    expire-seconds: 604800
+    redis-key-prefix: "agent:login:token:"

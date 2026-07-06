@@ -232,13 +232,22 @@ public class AgentServiceImpl implements AgentService {
                     context.getHistoryMessages(),
                     onDelta
             );
-            case TOOL_CALL -> {
-                String toolPrompt = PromptBuilder.buildToolPrompt(
+            case COMPLEX_TASK -> {
+                String routePrompt = PromptBuilder.buildRoutePrompt(
                         context.getQuery(),
                         context.getConversationSummary(),
                         context.getHistoryMessages()
                 );
-                onDelta.accept(toolCallingService.chatWithTools(context, toolPrompt));
+                // TODO 改为专门意图识别的大模型调用
+                String routeResult = llmService.chat(routePrompt);
+                // TODO 根据路由结果组装成新的Prompt
+                String taskPrompt = null;
+                try {
+                    taskPrompt = PromptBuilder.buildTaskPrompt(context, routeResult);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+                onDelta.accept(toolCallingService.chatWithTasks(context, taskPrompt));
             }
             case SIMPLE_CHAT -> {
                 String prompt = PromptBuilder.buildSimplePrompt(
@@ -392,16 +401,6 @@ public class AgentServiceImpl implements AgentService {
     private IntentType identifyByRules(String query) {
         String normalized = query.trim().toLowerCase(Locale.ROOT);
 
-        String[] toolKeywords = {
-                "调用工具", "使用工具", "运行", "生成报告", "导出", "查询天气",
-                "天气", "计算", "帮我生成", "tool", "api"
-        };
-        for (String keyword : toolKeywords) {
-            if (normalized.contains(keyword)) {
-                return IntentType.TOOL_CALL;
-            }
-        }
-
         String[] explicitKnowledgeKeywords = {
                 "知识库", "公司知识库", "内部文档", "内部资料", "内部制度", "内部规定", "内部规则",
                 "员工手册", "公司手册", "规章制度", "人员信息", "组织架构", "报销制度", "考勤制度",
@@ -446,13 +445,13 @@ public class AgentServiceImpl implements AgentService {
         StringBuilder prompt = new StringBuilder();
         prompt.append("你是一个意图识别器。请判断用户问题属于以下哪一种意图：\n");
         prompt.append("1. KNOWLEDGE_BASE：只有当用户问题明确指向公司内部制度、内部流程、内部资料、员工/人员/组织信息、行政人事财务等公司内部信息时才选择。\n");
-        prompt.append("2. TOOL_CALL：需要调用外部工具、接口、数据库、计算器或执行动作。\n");
-        prompt.append("3. SIMPLE_CHAT：普通聊天、解释概念、闲聊，或不需要知识库和工具的问题。\n\n");
+        prompt.append("2. SIMPLE_CHAT：普通聊天、解释概念、闲聊，或不需要知识库和工具的问题。\n\n");
+        prompt.append("3. COMPLEX_TASK：对于需要调用工具来解决的复杂问题。\n");
         prompt.append("### 判断边界\n");
         prompt.append("- 不要因为问题里出现“文档、资料、制度、规则、规定、文件、手册”等词就直接选择 KNOWLEDGE_BASE。\n");
         prompt.append("- 如果用户问的是通用知识、公共规则、编程文件、学习资料、概念解释、写作建议或普通闲聊，应选择 SIMPLE_CHAT。\n");
         prompt.append("- 只有问题语义明确落在公司内部范围，或结合最近会话可确认是在追问公司内部信息时，才选择 KNOWLEDGE_BASE。\n");
-        prompt.append("- 如果用户只是要求执行动作、查询外部实时信息、调用接口或使用工具，应选择 TOOL_CALL。\n\n");
+        prompt.append("- 如果用户只是要求执行动作、查询外部实时信息、执行复杂任务或使用工具，应选择 COMPLEX_TASK。\n\n");
 
         prompt.append("### 最近会话\n");
         if (historyMessages == null || historyMessages.isEmpty()) {

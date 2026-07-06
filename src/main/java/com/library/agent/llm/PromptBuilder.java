@@ -1,7 +1,14 @@
 package com.library.agent.llm;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.library.agent.context.AgentChatContext;
 import com.library.agent.entity.AgentShortTermMemory;
+import org.springframework.core.io.ClassPathResource;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
@@ -132,34 +139,145 @@ public final class PromptBuilder {
      * @param historyMessages 当前会话历史消息
      * @return 组装后的完整 Prompt
      */
-    public static String buildToolPrompt(String userQuestion, List<AgentShortTermMemory> historyMessages) {
-        return buildToolPrompt(userQuestion, null, historyMessages);
+    public static String buildRoutePrompt(String userQuestion, List<AgentShortTermMemory> historyMessages) {
+        return buildRoutePrompt(userQuestion, null, historyMessages);
     }
 
-    public static String buildToolPrompt(
+    public static String buildRoutePrompt(
             String userQuestion,
             String conversationSummary,
             List<AgentShortTermMemory> historyMessages
     ) {
         StringBuilder prompt = new StringBuilder();
-
-        prompt.append("### 角色定义与行为边界\n");
-        prompt.append("你是一个具备工具调用能力的 AI 助手，需要结合当前会话历史理解用户要执行的任务。\n");
-        prompt.append("如果需要调用工具，请根据用户真实意图选择合适工具；如果信息不足，请先说明缺少哪些参数。\n\n");
+        prompt.append("# Task Router\n\n");
+        prompt.append("## Role\n\n");
+        prompt.append("你是一个任务路由器（Task Router），负责根据用户输入，从可用任务列表中选择**最合适的一个任务能力模块（Task Context）**。\n\n");
+        prompt.append("你不会执行任务，也不会调用工具，只负责选择任务。\n\n");
 
         appendConversationSummary(prompt, conversationSummary);
         appendConversationHistory(prompt, historyMessages);
 
-        prompt.append("### 任务定义\n");
-        prompt.append("请根据用户问题判断是否需要工具调用，并在工具能力范围内完成任务。\n\n");
+        prompt.append("---\n\n");
 
-        prompt.append("### 约束\n");
-        prompt.append("1. 不要假设用户没有明确提供的关键参数。\n");
-        prompt.append("2. 如果当前问题依赖前文，请优先结合会话历史理解指代关系。\n");
-        prompt.append("3. 工具结果不足时，应说明限制，而不是编造结果。\n\n");
+        prompt.append("## Available Task Contexts\n\n");
+        prompt.append("你可以从以下任务中选择 **一个最合适的任务**：\n\n");
 
+        prompt.append("### 1. weather_query\n\n");
+        prompt.append("用于处理天气相关问题，包括：\n\n");
+        prompt.append("* 查询城市天气\n");
+        prompt.append("* 查询温度、风力、湿度\n");
+        prompt.append("* 查询是否下雨\n");
+        prompt.append("* 查询当前天气状况\n\n");
+
+
+        prompt.append("---\n\n");
+        prompt.append("## Output Format (IMPORTANT)\n\n");
+        prompt.append("你必须只输出 JSON，不允许输出任何解释、思考或多余文本：\n\n");
+        prompt.append("```json\n\n");
+        prompt.append("  \"task\": \"<selected_task_name>\"\n\n");
+        prompt.append("```\n\n");
+
+
+        prompt.append("---\n\n");
+        prompt.append("## Selection Rules\n\n");
+        prompt.append("请根据用户输入选择最匹配的任务：\n\n");
+
+
+        prompt.append("### weather_query\n\n");
+        prompt.append("当用户涉及以下内容时选择：\n\n");
+        prompt.append("* 天气\n");
+        prompt.append("* 气温\n");
+        prompt.append("* 下雨\n");
+        prompt.append("* 风力\n");
+        prompt.append("* 空气湿度\n");
+        prompt.append("* 当前天气\n");
+        prompt.append("* 今天/现在天气\n\n");
+
+
+        prompt.append("---\n\n");
+        prompt.append("## Examples\n\n");
+        prompt.append("### Example 1\n\n");
+        prompt.append("User:\n");
+        prompt.append("北京今天天气怎么样？\n\n");
+        prompt.append("Output:\n\n");
+        prompt.append("```json\n\n");
+        prompt.append("{\n");
+        prompt.append("  \"task\": \"weather_query\"\n\n");
+        prompt.append("}\n");
+        prompt.append("```\n\n");
+
+
+        prompt.append("---\n\n");
+        prompt.append("### Example 2\n\n");
+        prompt.append("User:\n");
+        prompt.append("上海现在多少度？\n\n");
+        prompt.append("Output:\n\n");
+        prompt.append("```json\n\n");
+        prompt.append("{\n");
+        prompt.append("  \"task\": \"weather_query\"\n");
+        prompt.append("}\n");
+        prompt.append("```\n\n");
+
+
+        prompt.append("---\n\n");
+        prompt.append("### Example 3\n\n");
+        prompt.append("User:\n");
+        prompt.append("帮我写一个Python排序算法\n\n");
+        prompt.append("Output:\n\n");
+        prompt.append("```json\n");
+        prompt.append("{\n");
+        prompt.append("  \"task\": \"code_generation\"\n");
+        prompt.append("}\n");
+        prompt.append("```\n\n");
+
+
+        prompt.append("---\n\n");
+        prompt.append("## Constraints\n\n");
+        prompt.append("* 只能输出 JSON\n");
+        prompt.append("* 必须选择一个 task\n");
+        prompt.append("* 不允许输出 reasoning\n");
+        prompt.append("* 不允许调用工具\n");
+        prompt.append("* 不允许回答用户问题\n\n");
         appendUserQuestion(prompt, userQuestion);
         return prompt.toString();
+    }
+
+    /**
+     * 根据LLM输出结果组装完整Prompt
+     * @param agentChatContext 会话上下文
+     * @param routeJSON Task选择结果(还未清洗)
+     * @return 完整的Prompt
+     */
+    public static String buildTaskPrompt(AgentChatContext agentChatContext, String routeJSON) throws IOException {
+        // 清洗字符串，去掉开头和结尾的md的JSON符号
+        String routeResult = cleanMarkdownJson(routeJSON);
+        // 解析JSON字符串
+        ObjectMapper objectMapper = new ObjectMapper();
+        JsonNode root = null;
+        try {
+            root = objectMapper.readTree(routeResult);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+        String taskName = root.get("task").asText();
+        StringBuilder taskPrompt = new StringBuilder();
+        // 读取md文件
+        String roleAndObjectivePrompt = loadMarkdown("Prompt/RoleAndObjectivePrompt.md");
+        String corePrinciplesPrompt = loadMarkdown("Prompt/CorePrinciplesPrompt.md");
+        String taskContext = loadMarkdown("Prompt/task/" + taskName + ".md");
+        String currentConversationStatePrompt = loadMarkdown("Prompt/CurrentConversationStatePrompt.md");
+        String outputRulesPrompt = loadMarkdown("Prompt/OutputRulesPrompt.md");
+        // 拼接完整Prompt
+        appendSection(taskPrompt, "# Role & Objective", roleAndObjectivePrompt);
+        appendSection(taskPrompt, "# Core Principles", corePrinciplesPrompt);
+        appendSection(taskPrompt, "# Specific Task Context", taskContext);
+        appendSection(taskPrompt, "# Current Conversation State", currentConversationStatePrompt);
+        appendSection(taskPrompt, "# Strict Output Rules (最高优先级)", outputRulesPrompt);
+        String prompt = taskPrompt.toString();
+        // 替换用户提问，会话摘要和历史会话并返回
+        return prompt.replace("{{user_question}}", agentChatContext.getQuery())
+                .replace("{{conversation_summary}}", agentChatContext.getConversationSummary())
+                .replace("{{recent_history}}", buildHistory(agentChatContext.getHistoryMessages()));
     }
 
     /**
@@ -323,4 +441,97 @@ public final class PromptBuilder {
             default -> role.trim();
         };
     }
+
+    /**
+     * 读取 Markdown 文件
+     */
+    private static String loadMarkdown(String classpath)
+            throws IOException {
+
+        ClassPathResource resource = new ClassPathResource(classpath);
+
+        if (!resource.exists()) {
+            throw new IllegalArgumentException(
+                    "Prompt文件不存在：" + classpath
+            );
+        }
+
+        return new String(
+                resource.getInputStream().readAllBytes(),
+                StandardCharsets.UTF_8
+        );
+    }
+
+    /**
+     * 添加一个 Prompt Section
+     */
+    private static void appendSection(StringBuilder builder,
+                               String title,
+                               String content) {
+
+        if (content == null || content.isBlank()) {
+            return;
+        }
+
+        builder.append("========================\n");
+        builder.append(title).append("\n");
+        builder.append("========================\n");
+
+        builder.append(content.trim());
+
+        builder.append("\n\n");
+    }
+
+    /**
+     * 将短期记忆转换为文本
+     */
+    private static String buildHistory(List<AgentShortTermMemory> histories) {
+
+        if (histories == null || histories.isEmpty()) {
+            return "";
+        }
+
+        StringBuilder sb = new StringBuilder();
+
+        for (AgentShortTermMemory history : histories) {
+
+            sb.append(history.getRole())
+                    .append(": ")
+                    .append(history.getContent().trim())
+                    .append("\n\n");
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * 清洗大模型返回的 JSON 字符串，去除首尾的 Markdown 代码块标记 (```json 和 ```)
+     *
+     * @param text 原始字符串
+     * @return 清洗后的纯 JSON 字符串
+     */
+    public static String cleanMarkdownJson(String text) {
+        if (text == null || text.isEmpty()) {
+            return text;
+        }
+
+        // 1. 先去除首尾的空白字符（换行、空格等）
+        String result = text.trim();
+
+        // 2. 处理开头的 ```json 或 ``` (忽略大小写，兼容 ```JSON 或 ```Json)
+        if (result.regionMatches(true, 0, "```json", 0, 7)) {
+            result = result.substring(7);
+        } else if (result.startsWith("```")) {
+            result = result.substring(3);
+        }
+
+        // 3. 处理结尾的 ```
+        if (result.endsWith("```")) {
+            result = result.substring(0, result.length() - 3);
+        }
+
+        // 4. 再次 trim，去除截取标记后可能残留的内部换行符或空格
+        return result.trim();
+    }
+
 }
