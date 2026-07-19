@@ -240,7 +240,6 @@ public class AgentServiceImpl implements AgentService {
                 );
                 // TODO 改为专门意图识别的大模型调用
                 String routeResult = llmService.chat(routePrompt);
-                // TODO 根据路由结果组装成新的Prompt
                 String taskPrompt = null;
                 try {
                     taskPrompt = PromptBuilder.buildTaskPrompt(context, routeResult);
@@ -255,6 +254,7 @@ public class AgentServiceImpl implements AgentService {
                         context.getConversationSummary(),
                         context.getHistoryMessages()
                 );
+                // TODO LLM调用超时采用下一个LLM
                 llmService.chatStream(prompt, onDelta);
             }
         }
@@ -405,7 +405,7 @@ public class AgentServiceImpl implements AgentService {
                 "知识库", "公司知识库", "内部文档", "内部资料", "内部制度", "内部规定", "内部规则",
                 "员工手册", "公司手册", "规章制度", "人员信息", "组织架构", "报销制度", "考勤制度",
                 "请假制度", "年假规定", "薪酬制度", "福利制度", "入职流程", "离职流程", "审批流程",
-                "rag", "检索知识库"
+                "检索知识库"
         };
         for (String keyword : explicitKnowledgeKeywords) {
             if (normalized.contains(keyword)) {

@@ -31,10 +31,10 @@ public class LlmServiceImpl implements LlmService {
     @Value("${bailian.embedding-model}")
     private String embeddingModel;
 
-    @Value("${bailian.chat-url}")
+    @Value("${deepseek.chat-url}")
     private String chatUrl;
 
-    @Value("${bailian.chat-model}")
+    @Value("${deepseek.chat-model}")
     private String chatModel;
 
     @Value("${bailian.rerank-url}")
@@ -45,10 +45,11 @@ public class LlmServiceImpl implements LlmService {
 
     private static final int EMBED_DIMENSIONS = 1536;
 
-    private final ChatModel toolChatModel;
-
     @Value("${bailian.api-key}")
-    private String apiKey;
+    private String baiLianApiKey;
+
+    @Value("${deepseek.api-key}")
+    private String deepseekApiKey;
 
     public String chat(String prompt) {
         if (prompt == null || prompt.trim().isEmpty()) {
@@ -61,7 +62,7 @@ public class LlmServiceImpl implements LlmService {
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
 
             conn.setRequestMethod("POST");
-            conn.setRequestProperty("Authorization", "Bearer " + apiKey);
+            conn.setRequestProperty("Authorization", "Bearer " + deepseekApiKey);
             conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
             conn.setConnectTimeout(10000);
             conn.setReadTimeout(60000);
@@ -151,7 +152,7 @@ public class LlmServiceImpl implements LlmService {
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
 
             conn.setRequestMethod("POST");
-            conn.setRequestProperty("Authorization", "Bearer " + apiKey);
+            conn.setRequestProperty("Authorization", "Bearer " + deepseekApiKey);
             conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
             conn.setRequestProperty("Accept", "text/event-stream");
             conn.setConnectTimeout(10000);
@@ -260,7 +261,7 @@ public class LlmServiceImpl implements LlmService {
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
 
                 conn.setRequestMethod("POST");
-                conn.setRequestProperty("Authorization", "Bearer " + apiKey);
+                conn.setRequestProperty("Authorization", "Bearer " + baiLianApiKey);
                 conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
                 conn.setConnectTimeout(10000);
                 conn.setReadTimeout(30000);
@@ -404,7 +405,7 @@ public class LlmServiceImpl implements LlmService {
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
 
             conn.setRequestMethod("POST");
-            conn.setRequestProperty("Authorization", "Bearer " + apiKey);
+            conn.setRequestProperty("Authorization", "Bearer " + baiLianApiKey);
             conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
             conn.setConnectTimeout(10000);
             conn.setReadTimeout(60000);

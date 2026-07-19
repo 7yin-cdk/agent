@@ -126,6 +126,7 @@ public class RagServiceImpl implements RagService {
             Consumer<String> onDelta
     ) {
         String prompt = buildRagPrompt(text, rewrittenQuestion, conversationSummary, historyMessages);
+        // TODO LLM调用超时时采用下一个LLM
         llmService.chatStream(prompt, onDelta);
     }
 

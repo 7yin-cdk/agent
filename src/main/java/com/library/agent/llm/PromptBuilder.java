@@ -149,95 +149,16 @@ public final class PromptBuilder {
             List<AgentShortTermMemory> historyMessages
     ) {
         StringBuilder prompt = new StringBuilder();
-        prompt.append("# Task Router\n\n");
-        prompt.append("## Role\n\n");
-        prompt.append("你是一个任务路由器（Task Router），负责根据用户输入，从可用任务列表中选择**最合适的一个任务能力模块（Task Context）**。\n\n");
-        prompt.append("你不会执行任务，也不会调用工具，只负责选择任务。\n\n");
-
         appendConversationSummary(prompt, conversationSummary);
         appendConversationHistory(prompt, historyMessages);
 
-        prompt.append("---\n\n");
-
-        prompt.append("## Available Task Contexts\n\n");
-        prompt.append("你可以从以下任务中选择 **一个最合适的任务**：\n\n");
-
-        prompt.append("### 1. weather_query\n\n");
-        prompt.append("用于处理天气相关问题，包括：\n\n");
-        prompt.append("* 查询城市天气\n");
-        prompt.append("* 查询温度、风力、湿度\n");
-        prompt.append("* 查询是否下雨\n");
-        prompt.append("* 查询当前天气状况\n\n");
-
-
-        prompt.append("---\n\n");
-        prompt.append("## Output Format (IMPORTANT)\n\n");
-        prompt.append("你必须只输出 JSON，不允许输出任何解释、思考或多余文本：\n\n");
-        prompt.append("```json\n\n");
-        prompt.append("  \"task\": \"<selected_task_name>\"\n\n");
-        prompt.append("```\n\n");
-
-
-        prompt.append("---\n\n");
-        prompt.append("## Selection Rules\n\n");
-        prompt.append("请根据用户输入选择最匹配的任务：\n\n");
-
-
-        prompt.append("### weather_query\n\n");
-        prompt.append("当用户涉及以下内容时选择：\n\n");
-        prompt.append("* 天气\n");
-        prompt.append("* 气温\n");
-        prompt.append("* 下雨\n");
-        prompt.append("* 风力\n");
-        prompt.append("* 空气湿度\n");
-        prompt.append("* 当前天气\n");
-        prompt.append("* 今天/现在天气\n\n");
-
-
-        prompt.append("---\n\n");
-        prompt.append("## Examples\n\n");
-        prompt.append("### Example 1\n\n");
-        prompt.append("User:\n");
-        prompt.append("北京今天天气怎么样？\n\n");
-        prompt.append("Output:\n\n");
-        prompt.append("```json\n\n");
-        prompt.append("{\n");
-        prompt.append("  \"task\": \"weather_query\"\n\n");
-        prompt.append("}\n");
-        prompt.append("```\n\n");
-
-
-        prompt.append("---\n\n");
-        prompt.append("### Example 2\n\n");
-        prompt.append("User:\n");
-        prompt.append("上海现在多少度？\n\n");
-        prompt.append("Output:\n\n");
-        prompt.append("```json\n\n");
-        prompt.append("{\n");
-        prompt.append("  \"task\": \"weather_query\"\n");
-        prompt.append("}\n");
-        prompt.append("```\n\n");
-
-
-        prompt.append("---\n\n");
-        prompt.append("### Example 3\n\n");
-        prompt.append("User:\n");
-        prompt.append("帮我写一个Python排序算法\n\n");
-        prompt.append("Output:\n\n");
-        prompt.append("```json\n");
-        prompt.append("{\n");
-        prompt.append("  \"task\": \"code_generation\"\n");
-        prompt.append("}\n");
-        prompt.append("```\n\n");
-
-
-        prompt.append("---\n\n");
-        prompt.append("## Constraints\n\n");
-        prompt.append("* 只能输出 JSON\n");
-        prompt.append("* 必须选择一个 task\n");
-        prompt.append("* 不允许输出 reasoning\n");
-        prompt.append("* 不允许调用工具\n");
-        prompt.append("* 不允许回答用户问题\n\n");
+        String routePrompt;
+        try {
+            routePrompt = loadMarkdown("Prompt/RoutePrompt.md");
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to load RoutePrompt.md", e);
+        }
+        prompt.append(routePrompt).append("\n\n");
         appendUserQuestion(prompt, userQuestion);
         return prompt.toString();
     }

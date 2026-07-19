@@ -13,7 +13,7 @@ public class LangChain4jConfig {
 
     @Bean
     public ChatModel chatModel(
-            @Value("${bailian.tool-chat-url}") String baseUrl,
+            @Value("${bailian.chat-url}") String baseUrl,
             @Value("${bailian.api-key}") String apiKey,
             @Value("${bailian.chat-model}") String modelName
     ) {

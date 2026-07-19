@@ -36,6 +36,7 @@ import java.util.UUID;
 public class ToolCallingServiceImpl implements ToolCallingService {
 
     private static final int MAX_REACT_STEPS = 10;
+    private static final int MAX_CONSECUTIVE_TOOL_FAILURES = 3;
     private static final int REACT_HISTORY_LIMIT = 8;
     private static final String APPLICATION_PACKAGE_PREFIX = "com.library.agent";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -89,6 +90,8 @@ public class ToolCallingServiceImpl implements ToolCallingService {
         }
         List<ReActStep> steps = new ArrayList<>();
         Object memoryId = context == null ? null : context.getConversationId();
+        String lastFailedToolName = null;
+        int sameToolConsecutiveFailures = 0;
 
         for (int stepNumber = 1; stepNumber <= MAX_REACT_STEPS; stepNumber++) {
             // 在Prompt中增加ReAct历史
@@ -102,6 +105,7 @@ public class ToolCallingServiceImpl implements ToolCallingService {
                     ================== END ReAct NEXT INPUT step={} ==================
                     """, stepNumber, finalPrompt, stepNumber);
 
+            // TODO LLM调用超时时换下一个LLM
             ChatResponse response = chatModel.chat(ChatRequest.builder()
                     .messages(buildReActMessages(finalPrompt))
                     .build());
@@ -114,7 +118,25 @@ public class ToolCallingServiceImpl implements ToolCallingService {
                     ================= END ReAct MODEL OUTPUT step={} =================
                     """, stepNumber, modelOutput, stepNumber);
 
-            ReActDecision decision = parseDecision(modelOutput);
+            ReActDecision decision;
+            try {
+                decision = parseDecision(modelOutput);
+            } catch (Exception e) {
+                log.warn("Failed to parse ReAct JSON, step={}", stepNumber, e);
+                sameToolConsecutiveFailures++;
+                if (sameToolConsecutiveFailures >= MAX_CONSECUTIVE_TOOL_FAILURES) {
+                    String toolInfo = lastFailedToolName != null
+                            ? "工具 " + lastFailedToolName + " 暂时不可用"
+                            : "系统暂时无法处理您的请求";
+                    return toolInfo + "，请稍后再试。";
+                }
+                String errorDetail = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                ReActObservation parseErrorObs = new ReActObservation(false, null,
+                        "Invalid JSON output: " + errorDetail
+                                + ". Please output exactly one valid JSON object following the required format.");
+                steps.add(new ReActStep(stepNumber, "Failed to parse model output", null, parseErrorObs));
+                continue;
+            }
             log.info("ReAct decision, step={}, type={}, thought={}", stepNumber, decision.type(), decision.thought());
 
             if (decision.isFinish()) {
@@ -137,6 +159,22 @@ public class ToolCallingServiceImpl implements ToolCallingService {
                     =============== END ReAct TOOL OBSERVATION step={} ===============
                     """, stepNumber, actionToJson(decision.tool()), toJson(observation), stepNumber);
             steps.add(new ReActStep(stepNumber, decision.thought(), decision.tool(), observation));
+
+            if (!observation.success()) {
+                String currentToolName = decision.tool().name();
+                if (currentToolName.equals(lastFailedToolName)) {
+                    sameToolConsecutiveFailures++;
+                } else {
+                    lastFailedToolName = currentToolName;
+                    sameToolConsecutiveFailures = 1;
+                }
+                if (sameToolConsecutiveFailures >= MAX_CONSECUTIVE_TOOL_FAILURES) {
+                    return "工具 " + lastFailedToolName + " 暂时不可用，请稍后再试。";
+                }
+            } else {
+                lastFailedToolName = null;
+                sameToolConsecutiveFailures = 0;
+            }
         }
 
         return "Too many ReAct steps. Please provide clearer conditions and try again.";
