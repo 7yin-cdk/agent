@@ -8,6 +8,7 @@ import com.library.agent.llm.ToolCallingService;
 import com.library.agent.memory.ConversationSummaryService;
 import com.library.agent.memory.ShortTermMemoryService;
 import com.library.agent.rag.service.RagService;
+import io.micrometer.tracing.Tracer;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -80,7 +81,8 @@ class AgentServiceImplIntentTest {
                 mock(ShortTermMemoryService.class),
                 mock(ConversationSummaryService.class),
                 mock(ToolCallingService.class),
-                mock(QueryRewriteService.class)
+                mock(QueryRewriteService.class),
+                mock(Tracer.class)
         );
     }
 }

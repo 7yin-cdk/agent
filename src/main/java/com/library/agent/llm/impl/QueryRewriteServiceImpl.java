@@ -6,6 +6,9 @@ import com.library.agent.entity.AgentShortTermMemory;
 import com.library.agent.llm.LlmService;
 import com.library.agent.llm.QueryRewriteResult;
 import com.library.agent.llm.QueryRewriteService;
+import com.library.agent.tracing.TracingConstant;
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,6 +24,7 @@ public class QueryRewriteServiceImpl implements QueryRewriteService {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final LlmService llmService;
+    private final Tracer tracer;
 
     @Override
     public QueryRewriteResult rewrite(
@@ -33,7 +37,11 @@ public class QueryRewriteServiceImpl implements QueryRewriteService {
         }
 
         String originalQuery = query.trim();
-        try {
+        Span span = tracer.nextSpan()
+                .name(TracingConstant.QUERY_REWRITE)
+                .start();
+
+        try (Tracer.SpanInScope ignored = tracer.withSpan(span)) {
             String result = llmService.chat(buildRewritePrompt(originalQuery, conversationSummary, historyMessages));
             QueryRewriteResult rewriteResult = parseResult(originalQuery, result);
             log.info("Query rewrite result, rewritten={}, original={}, rewrittenQuery={}",
@@ -43,8 +51,11 @@ public class QueryRewriteServiceImpl implements QueryRewriteService {
             );
             return rewriteResult;
         } catch (Exception e) {
+            span.error(e);
             log.warn("Query rewrite failed, fallback to original query", e);
             return QueryRewriteResult.unchanged(originalQuery);
+        } finally {
+            span.end();
         }
     }
 

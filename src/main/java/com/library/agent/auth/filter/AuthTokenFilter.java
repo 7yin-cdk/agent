@@ -80,7 +80,8 @@ public class AuthTokenFilter implements Filter {
                 || path.equals("/auth/login")
                 || path.equals("/error")
                 || path.startsWith("/static/")
-                || path.equals("/test.html");
+                || path.equals("/test.html")
+                || path.equals("/stream.html");
     }
 
     private String resolveToken(HttpServletRequest request) {

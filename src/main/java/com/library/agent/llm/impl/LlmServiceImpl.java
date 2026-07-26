@@ -5,7 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.library.agent.llm.LlmService;
-import dev.langchain4j.model.chat.ChatModel;
+import com.library.agent.tracing.TracingConstant;
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -44,6 +46,7 @@ public class LlmServiceImpl implements LlmService {
     private String rerankModel;
 
     private static final int EMBED_DIMENSIONS = 1536;
+    private static final int MAX_PROMPT_TAG_LENGTH = 500;
 
     @Value("${bailian.api-key}")
     private String baiLianApiKey;
@@ -51,10 +54,146 @@ public class LlmServiceImpl implements LlmService {
     @Value("${deepseek.api-key}")
     private String deepseekApiKey;
 
+    private final Tracer tracer;
+
     public String chat(String prompt) {
         if (prompt == null || prompt.trim().isEmpty()) {
             throw new RuntimeException("Prompt不能为空");
         }
+
+        Span span = tracer.nextSpan()
+                .name(TracingConstant.LLM_DEEPSEEK_CHAT)
+                .start();
+
+        long startMs = System.currentTimeMillis();
+        try (Tracer.SpanInScope ignored = tracer.withSpan(span)) {
+            span.tag(TracingConstant.TAG_MODEL, chatModel);
+            span.tag(TracingConstant.TAG_PROMPT_LENGTH, String.valueOf(prompt.length()));
+
+            String result = doChat(prompt);
+
+            span.tag(TracingConstant.TAG_RESPONSE_LENGTH, String.valueOf(result.length()));
+            return result;
+
+        } catch (Exception e) {
+            span.error(e);
+            throw new RuntimeException("百炼Chat失败", e);
+        } finally {
+            span.tag(TracingConstant.TAG_DURATION_MS,
+                    String.valueOf(System.currentTimeMillis() - startMs));
+            span.end();
+        }
+    }
+
+    @Override
+    public void chatStream(String prompt, Consumer<String> onDelta) {
+        if (prompt == null || prompt.trim().isEmpty()) {
+            throw new RuntimeException("Prompt cannot be empty");
+        }
+        if (onDelta == null) {
+            throw new RuntimeException("onDelta cannot be null");
+        }
+
+        Span span = tracer.nextSpan()
+                .name(TracingConstant.LLM_DEEPSEEK_CHAT_STREAM)
+                .start();
+
+        long startMs = System.currentTimeMillis();
+        try (Tracer.SpanInScope ignored = tracer.withSpan(span)) {
+            span.tag(TracingConstant.TAG_MODEL, chatModel);
+            span.tag(TracingConstant.TAG_PROMPT_LENGTH, String.valueOf(prompt.length()));
+
+            doChatStream(prompt, onDelta);
+
+        } catch (Exception e) {
+            span.error(e);
+            throw new RuntimeException("Streaming chat failed", e);
+        } finally {
+            span.tag(TracingConstant.TAG_DURATION_MS,
+                    String.valueOf(System.currentTimeMillis() - startMs));
+            span.end();
+        }
+    }
+
+    public List<List<Float>> embed(List<String> texts) {
+        if (texts == null || texts.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        Span span = tracer.nextSpan()
+                .name(TracingConstant.LLM_BAILIAN_EMBED)
+                .start();
+
+        long startMs = System.currentTimeMillis();
+        try (Tracer.SpanInScope ignored = tracer.withSpan(span)) {
+            span.tag(TracingConstant.TAG_MODEL, embeddingModel);
+            span.tag("gen_ai.input.count", String.valueOf(texts.size()));
+
+            List<List<Float>> result = doEmbed(texts);
+
+            span.tag("gen_ai.output.count", String.valueOf(result.size()));
+            return result;
+
+        } catch (Exception e) {
+            span.error(e);
+            throw new RuntimeException("百炼Embedding失败", e);
+        } finally {
+            span.tag(TracingConstant.TAG_DURATION_MS,
+                    String.valueOf(System.currentTimeMillis() - startMs));
+            span.end();
+        }
+    }
+
+    @Override
+    public List<Float> embed(String text) {
+        List<String> texts = new ArrayList<>();
+        texts.add(text);
+
+        List<List<Float>> embeddings = embed(texts);
+        if (embeddings == null || embeddings.isEmpty()) {
+            throw new RuntimeException("Embedding结果为空");
+        }
+
+        return embeddings.get(0);
+    }
+
+    @Override
+    public List<Integer> rerank(String query, List<String> documents, int topN, double minScore) {
+        if (query == null || query.trim().isEmpty()) {
+            throw new RuntimeException("Rerank query cannot be empty");
+        }
+        if (documents == null || documents.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        Span span = tracer.nextSpan()
+                .name(TracingConstant.LLM_BAILIAN_RERANK)
+                .start();
+
+        long startMs = System.currentTimeMillis();
+        try (Tracer.SpanInScope ignored = tracer.withSpan(span)) {
+            span.tag(TracingConstant.TAG_MODEL, rerankModel);
+            span.tag("gen_ai.rerank.document_count", String.valueOf(documents.size()));
+            span.tag("gen_ai.rerank.top_n", String.valueOf(topN));
+
+            List<Integer> result = doRerank(query, documents, topN, minScore);
+
+            span.tag("gen_ai.rerank.result_count", String.valueOf(result.size()));
+            return result;
+
+        } catch (Exception e) {
+            span.error(e);
+            throw new RuntimeException("Qwen3 rerank failed", e);
+        } finally {
+            span.tag(TracingConstant.TAG_DURATION_MS,
+                    String.valueOf(System.currentTimeMillis() - startMs));
+            span.end();
+        }
+    }
+
+    /* ==================== 原始实现（从原方法提取的内部方法） ==================== */
+
+    private String doChat(String prompt) {
         try {
             ObjectMapper objectMapper = new ObjectMapper();
 
@@ -136,15 +275,7 @@ public class LlmServiceImpl implements LlmService {
         }
     }
 
-    @Override
-    public void chatStream(String prompt, Consumer<String> onDelta) {
-        if (prompt == null || prompt.trim().isEmpty()) {
-            throw new RuntimeException("Prompt cannot be empty");
-        }
-        if (onDelta == null) {
-            throw new RuntimeException("onDelta cannot be null");
-        }
-
+    private void doChatStream(String prompt, Consumer<String> onDelta) {
         try {
             ObjectMapper objectMapper = new ObjectMapper();
 
@@ -240,12 +371,8 @@ public class LlmServiceImpl implements LlmService {
         }
     }
 
-    public List<List<Float>> embed(List<String> texts) {
-        if (texts == null || texts.isEmpty()) {
-            return new ArrayList<>();
-        }
-
-        final int BATCH_SIZE = 10; // ⭐ 百炼硬限制
+    private List<List<Float>> doEmbed(List<String> texts) {
+        final int BATCH_SIZE = 10;
 
         List<List<Float>> allResult = new ArrayList<>();
 
@@ -267,9 +394,6 @@ public class LlmServiceImpl implements LlmService {
                 conn.setReadTimeout(30000);
                 conn.setDoOutput(true);
 
-                // =====================
-                // 构造请求
-                // =====================
                 ObjectNode requestJson = objectMapper.createObjectNode();
                 requestJson.put("model", embeddingModel);
                 requestJson.put("dimensions", EMBED_DIMENSIONS);
@@ -288,9 +412,6 @@ public class LlmServiceImpl implements LlmService {
                     os.write(requestBody.getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 }
 
-                // =====================
-                // 读取响应
-                // =====================
                 int code = conn.getResponseCode();
 
                 InputStream inputStream = (code >= 200 && code < 300)
@@ -311,9 +432,6 @@ public class LlmServiceImpl implements LlmService {
 
                 JsonNode root = objectMapper.readTree(responseStr);
 
-                // =====================
-                // 错误处理
-                // =====================
                 if (root.has("error")) {
                     throw new RuntimeException("Embedding失败: " + root.get("error").toString());
                 }
@@ -324,9 +442,6 @@ public class LlmServiceImpl implements LlmService {
                     throw new RuntimeException("返回data为空: " + responseStr);
                 }
 
-                // =====================
-                // 解析向量
-                // =====================
                 for (JsonNode item : dataArray) {
                     JsonNode embeddingNode = item.get("embedding");
 
@@ -339,9 +454,6 @@ public class LlmServiceImpl implements LlmService {
                 }
             }
 
-            // =====================
-            // 一致性校验
-            // =====================
             if (allResult.size() != texts.size()) {
                 throw new RuntimeException(
                         "向量数量不一致 input="
@@ -358,28 +470,7 @@ public class LlmServiceImpl implements LlmService {
         }
     }
 
-    @Override
-    public List<Float> embed(String text) {
-        List<String> texts = new ArrayList<>();
-        texts.add(text);
-
-        List<List<Float>> embeddings = embed(texts);
-        if (embeddings == null || embeddings.isEmpty()) {
-            throw new RuntimeException("Embedding结果为空");
-        }
-
-        return embeddings.get(0);
-    }
-
-    @Override
-    public List<Integer> rerank(String query, List<String> documents, int topN, double minScore) {
-        if (query == null || query.trim().isEmpty()) {
-            throw new RuntimeException("Rerank query cannot be empty");
-        }
-        if (documents == null || documents.isEmpty()) {
-            return new ArrayList<>();
-        }
-
+    private List<Integer> doRerank(String query, List<String> documents, int topN, double minScore) {
         List<String> validDocuments = new ArrayList<>();
         List<Integer> originalIndexes = new ArrayList<>();
 
@@ -426,9 +517,6 @@ public class LlmServiceImpl implements LlmService {
 
             ObjectNode parameters = objectMapper.createObjectNode();
             parameters.put("top_n", safeTopN);
-
-            // false 表示只返回 index + relevance_score，减少网络返回体。
-            // 因为我们本地已经有 documents，不需要模型再把文本返回一遍。
             parameters.put("return_documents", false);
             requestJson.set("parameters", parameters);
 
@@ -497,5 +585,4 @@ public class LlmServiceImpl implements LlmService {
             throw new RuntimeException("Qwen3 rerank failed", e);
         }
     }
-
 }

@@ -20,8 +20,11 @@ import com.library.agent.memory.ConversationSummaryService;
 import com.library.agent.memory.ShortTermMemoryService;
 import com.library.agent.rag.service.RagService;
 import com.library.agent.service.AgentService;
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -63,6 +66,7 @@ public class AgentServiceImpl implements AgentService {
     private final ConversationSummaryService conversationSummaryService;
     private final ToolCallingService toolCallingService;
     private final QueryRewriteService queryRewriteService;
+    private final Tracer tracer;
 
     /**
      * 执行带会话的 Agent 聊天。
@@ -124,17 +128,33 @@ public class AgentServiceImpl implements AgentService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
         }
 
+        Span currentSpan = tracer.currentSpan();
+        Map<String, String> mdcContext = MDC.getCopyOfContextMap();
+
         SseEmitter emitter = new SseEmitter(120000L);
         CompletableFuture.runAsync(() -> {
             UserContextHolder.set(userContext);
             try {
-                doChatStream(request, emitter);
+                if (currentSpan != null) {
+                    try (Tracer.SpanInScope ignored = tracer.withSpan(currentSpan)) {
+                        if (mdcContext != null) {
+                            MDC.setContextMap(mdcContext);
+                        }
+                        doChatStream(request, emitter);
+                    }
+                } else {
+                    if (mdcContext != null) {
+                        MDC.setContextMap(mdcContext);
+                    }
+                    doChatStream(request, emitter);
+                }
                 emitter.complete();
             } catch (Exception e) {
                 sendEvent(emitter, "error", Map.of("message", e.getMessage() == null ? "Stream failed" : e.getMessage()));
                 emitter.complete();
             } finally {
                 UserContextHolder.clear();
+                MDC.clear();
             }
         });
         return emitter;
