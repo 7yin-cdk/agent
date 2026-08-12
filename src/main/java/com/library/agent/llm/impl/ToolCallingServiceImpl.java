@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.library.agent.context.AgentChatContext;
 import com.library.agent.entity.AgentShortTermMemory;
 import com.library.agent.llm.ToolCallingService;
-import com.library.agent.tracing.TracingConstant;
+import com.library.agent.observability.ConversationTraceCollector;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
@@ -18,20 +18,27 @@ import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.service.tool.DefaultToolExecutor;
 import dev.langchain4j.service.tool.ToolExecutor;
-import io.micrometer.tracing.Span;
-import io.micrometer.tracing.Tracer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
 import java.lang.reflect.Method;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 @Slf4j
 @Service
@@ -44,9 +51,21 @@ public class ToolCallingServiceImpl implements ToolCallingService {
     private static final String APPLICATION_PACKAGE_PREFIX = "com.library.agent";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
+    @Value("${agent.tool.timeout-seconds:30}")
+    private int toolTimeoutSeconds;
+
+    /**
+     * 工具执行专用线程池，用于 CompletableFuture 超时控制。
+     * 使用守护线程避免阻塞 JVM 退出。
+     */
+    private final ExecutorService toolExecutor = Executors.newFixedThreadPool(4, r -> {
+        Thread t = new Thread(r, "tool-exec-");
+        t.setDaemon(true);
+        return t;
+    });
+
     private final ChatModel chatModel;
     private final ApplicationContext applicationContext;
-    private final Tracer tracer;
 
     private final Map<String, RegisteredTool> registeredTools = new LinkedHashMap<>();
 
@@ -87,6 +106,22 @@ public class ToolCallingServiceImpl implements ToolCallingService {
         ToolSpecifications.validateSpecifications(toolSpecifications());
     }
 
+    /**
+     * 关闭工具执行线程池，释放线程资源。
+     */
+    @jakarta.annotation.PreDestroy
+    public void shutdownToolExecutor() {
+        toolExecutor.shutdown();
+        try {
+            if (!toolExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                toolExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            toolExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
+
     @Override
     public String chatWithTasks(AgentChatContext context, String reactPrompt) {
         if (registeredTools.isEmpty()) {
@@ -98,41 +133,19 @@ public class ToolCallingServiceImpl implements ToolCallingService {
         int sameToolConsecutiveFailures = 0;
 
         for (int stepNumber = 1; stepNumber <= MAX_REACT_STEPS; stepNumber++) {
-            Span stepSpan = tracer.nextSpan()
-                    .name(TracingConstant.REACT_STEP_PREFIX + "-" + stepNumber)
-                    .start();
-
-            try (Tracer.SpanInScope stepScope = tracer.withSpan(stepSpan)) {
+            try {
                 StringBuilder builder = new StringBuilder();
                 appendReActHistory(builder, steps);
                 String finalPrompt = reactPrompt.replace("{{react_history}}", builder.toString());
-                log.info("""
+                log.info("ReAct step={} input length={}", stepNumber, finalPrompt.length());
 
-                        ==================== ReAct NEXT INPUT step={} ====================
-                        {}
-                        ================== END ReAct NEXT INPUT step={} ==================
-                        """, stepNumber, finalPrompt, stepNumber);
-
-                /* LLM 调用子 Span */
-                Span llmSpan = tracer.nextSpan()
-                        .name(TracingConstant.REACT_LLM_CALL)
-                        .start();
-                ChatResponse response;
-                try (Tracer.SpanInScope llmScope = tracer.withSpan(llmSpan)) {
-                    response = chatModel.chat(ChatRequest.builder()
-                            .messages(buildReActMessages(finalPrompt))
-                            .build());
-                } finally {
-                    llmSpan.end();
-                }
+                ChatResponse response = chatModel.chat(ChatRequest.builder()
+                        .messages(buildReActMessages(finalPrompt))
+                        .build());
 
                 String modelOutput = response.aiMessage() == null ? null : response.aiMessage().text();
-                log.info("""
-
-                        =================== ReAct MODEL OUTPUT step={} ===================
-                        {}
-                        ================= END ReAct MODEL OUTPUT step={} =================
-                        """, stepNumber, modelOutput, stepNumber);
+                log.info("ReAct step={} model output length={}", stepNumber,
+                        modelOutput != null ? modelOutput.length() : 0);
 
                 ReActDecision decision;
                 try {
@@ -144,7 +157,6 @@ public class ToolCallingServiceImpl implements ToolCallingService {
                         String toolInfo = lastFailedToolName != null
                                 ? "工具 " + lastFailedToolName + " 暂时不可用"
                                 : "系统暂时无法处理您的请求";
-                        stepSpan.tag("react.outcome", "error");
                         return toolInfo + "，请稍后再试。";
                     }
                     String errorDetail = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
@@ -154,10 +166,8 @@ public class ToolCallingServiceImpl implements ToolCallingService {
                     steps.add(new ReActStep(stepNumber, "Failed to parse model output", null, parseErrorObs));
                     continue;
                 }
-                log.info("ReAct decision, step={}, type={}, thought={}", stepNumber, decision.type(), decision.thought());
 
                 if (decision.isFinish()) {
-                    stepSpan.tag("react.outcome", "finish");
                     String answer = decision.finish().answer();
                     return answer == null || answer.isBlank()
                             ? "Tool task finished, but no answer was returned." : answer;
@@ -165,28 +175,13 @@ public class ToolCallingServiceImpl implements ToolCallingService {
 
                 ToolCallValidationResult validationResult = validateToolAction(decision.tool());
                 if (!validationResult.ok()) {
-                    stepSpan.tag("react.outcome", "validation_failed");
                     return validationResult.message();
                 }
 
                 ToolExecutionRequest toolRequest = toToolExecutionRequest(decision.tool());
-                Span toolSpan = tracer.nextSpan()
-                        .name(TracingConstant.REACT_TOOL_PREFIX + "." + decision.tool().name())
-                        .start();
-                ReActObservation observation;
-                try (Tracer.SpanInScope toolScope = tracer.withSpan(toolSpan)) {
-                    observation = executeTool(toolRequest, memoryId);
-                    toolSpan.tag("tool.success", String.valueOf(observation.success()));
-                } finally {
-                    toolSpan.end();
-                }
-                log.info("""
-
-                        ================= ReAct TOOL OBSERVATION step={} =================
-                        action: {}
-                        observation: {}
-                        =============== END ReAct TOOL OBSERVATION step={} ===============
-                        """, stepNumber, actionToJson(decision.tool()), toJson(observation), stepNumber);
+                ReActObservation observation = executeTool(toolRequest, memoryId);
+                log.info("ReAct step={} tool={} result={}", stepNumber,
+                        decision.tool().name(), toJson(observation));
                 steps.add(new ReActStep(stepNumber, decision.thought(), decision.tool(), observation));
 
                 if (!observation.success()) {
@@ -198,15 +193,119 @@ public class ToolCallingServiceImpl implements ToolCallingService {
                         sameToolConsecutiveFailures = 1;
                     }
                     if (sameToolConsecutiveFailures >= MAX_CONSECUTIVE_TOOL_FAILURES) {
-                        stepSpan.tag("react.outcome", "tool_error");
                         return "工具 " + lastFailedToolName + " 暂时不可用，请稍后再试。";
                     }
                 } else {
                     lastFailedToolName = null;
                     sameToolConsecutiveFailures = 0;
                 }
-            } finally {
-                stepSpan.end();
+            } catch (Exception e) {
+                log.error("ReAct step {} failed", stepNumber, e);
+            }
+        }
+
+        return "Too many ReAct steps. Please provide clearer conditions and try again.";
+    }
+
+    /**
+     * 带可观测采集器的 ReAct 对话。
+     * <p>
+     * 在每个步骤中记录 LLM 调用（prompt、response、token）和工具调用（工具名、输入、输出）。
+     */
+    @Override
+    public String chatWithTasks(AgentChatContext context, String reactPrompt,
+                                ConversationTraceCollector collector) {
+        if (registeredTools.isEmpty()) {
+            return chatModel.chat(userQuestion(context, reactPrompt));
+        }
+        List<ReActStep> steps = new ArrayList<>();
+        Object memoryId = context == null ? null : context.getConversationId();
+        String lastFailedToolName = null;
+        int sameToolConsecutiveFailures = 0;
+
+        for (int stepNumber = 1; stepNumber <= MAX_REACT_STEPS; stepNumber++) {
+            try {
+                StringBuilder builder = new StringBuilder();
+                appendReActHistory(builder, steps);
+                String finalPrompt = reactPrompt.replace("{{react_history}}", builder.toString());
+                log.info("ReAct step={} input length={}", stepNumber, finalPrompt.length());
+
+                /* LLM 调用 */
+                long llmStart = System.currentTimeMillis();
+                ChatResponse response = chatModel.chat(ChatRequest.builder()
+                        .messages(buildReActMessages(finalPrompt))
+                        .build());
+                long llmDuration = System.currentTimeMillis() - llmStart;
+
+                String modelOutput = response.aiMessage() == null ? null : response.aiMessage().text();
+                int outputTokens = response.tokenUsage() != null
+                        ? response.tokenUsage().outputTokenCount() : 0;
+                int inputTokens = response.tokenUsage() != null
+                        ? response.tokenUsage().inputTokenCount() : 0;
+                collector.recordLlmCall("deepseek", "REACT_LLM", finalPrompt, modelOutput,
+                        inputTokens, outputTokens, llmDuration);
+                log.info("ReAct step={} model output length={}", stepNumber,
+                        modelOutput != null ? modelOutput.length() : 0);
+
+                ReActDecision decision;
+                try {
+                    decision = parseDecision(modelOutput);
+                } catch (Exception e) {
+                    log.warn("Failed to parse ReAct JSON, step={}", stepNumber, e);
+                    sameToolConsecutiveFailures++;
+                    if (sameToolConsecutiveFailures >= MAX_CONSECUTIVE_TOOL_FAILURES) {
+                        return (lastFailedToolName != null
+                                ? "工具 " + lastFailedToolName + " 暂时不可用" : "系统暂时无法处理您的请求") + "，请稍后再试。";
+                    }
+                    String errorDetail = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                    steps.add(new ReActStep(stepNumber, "Failed to parse model output", null,
+                            new ReActObservation(false, null, "Invalid JSON output: " + errorDetail)));
+                    continue;
+                }
+
+                if (decision.isFinish()) {
+                    String answer = decision.finish().answer();
+                    return answer == null || answer.isBlank()
+                            ? "Tool task finished, but no answer was returned." : answer;
+                }
+
+                ToolCallValidationResult validationResult = validateToolAction(decision.tool());
+                if (!validationResult.ok()) {
+                    return validationResult.message();
+                }
+
+                /* 工具调用 */
+                ToolExecutionRequest toolRequest = toToolExecutionRequest(decision.tool());
+                long toolStart = System.currentTimeMillis();
+                ReActObservation observation = executeTool(toolRequest, memoryId);
+                long toolDuration = System.currentTimeMillis() - toolStart;
+
+                collector.recordToolCall(
+                        decision.tool().name(),
+                        actionToJson(decision.tool()),
+                        observation.content(),
+                        observation.success(),
+                        toolDuration);
+
+                steps.add(new ReActStep(stepNumber, decision.thought(), decision.tool(), observation));
+
+                if (!observation.success()) {
+                    String currentToolName = decision.tool().name();
+                    if (currentToolName.equals(lastFailedToolName)) {
+                        sameToolConsecutiveFailures++;
+                    } else {
+                        lastFailedToolName = currentToolName;
+                        sameToolConsecutiveFailures = 1;
+                    }
+                    if (sameToolConsecutiveFailures >= MAX_CONSECUTIVE_TOOL_FAILURES) {
+                        return "工具 " + lastFailedToolName + " 暂时不可用，请稍后再试。";
+                    }
+                } else {
+                    lastFailedToolName = null;
+                    sameToolConsecutiveFailures = 0;
+                }
+            } catch (Exception e) {
+                log.error("ReAct step {} failed", stepNumber, e);
             }
         }
 
@@ -610,11 +709,35 @@ Rules:
         }
 
         try {
-            String result = registeredTool.executor().execute(toolRequest, memoryId);
+            String result = CompletableFuture
+                    .supplyAsync(() -> {
+                        try {
+                            return registeredTool.executor().execute(toolRequest, memoryId);
+                        } catch (Exception e) {
+                            throw new CompletionException(e);
+                        }
+                    }, toolExecutor)
+                    .orTimeout(toolTimeoutSeconds, TimeUnit.SECONDS)
+                    .join();
             return new ReActObservation(true, result, null);
-        } catch (Exception e) {
-            log.warn("Tool execution failed, name={}, arguments={}", toolRequest.name(), toolRequest.arguments(), e);
-            String error = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+        } catch (CancellationException e) {
+            log.warn("Tool execution cancelled, name={}", toolRequest.name());
+            return new ReActObservation(false, null,
+                    "工具 " + toolRequest.name() + " 执行被取消");
+        } catch (CompletionException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof TimeoutException) {
+                log.warn("Tool execution timeout, name={}, timeout={}s, arguments={}",
+                        toolRequest.name(), toolTimeoutSeconds, toolRequest.arguments());
+                return new ReActObservation(false, null,
+                        "工具 " + toolRequest.name() + " 执行超时（超过 "
+                                + toolTimeoutSeconds + " 秒），请检查目标服务状态后重试");
+            }
+            String error = cause != null && cause.getMessage() != null
+                    ? cause.getMessage()
+                    : cause != null ? cause.getClass().getSimpleName() : e.getClass().getSimpleName();
+            log.warn("Tool execution failed, name={}, arguments={}",
+                    toolRequest.name(), toolRequest.arguments(), cause != null ? cause : e);
             return new ReActObservation(false, null, error);
         }
     }

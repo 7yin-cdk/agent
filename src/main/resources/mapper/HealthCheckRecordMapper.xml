@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.library.agent.mapper.HealthCheckRecordMapper">
+
+    <resultMap id="HealthCheckRecordResultMap" type="com.library.agent.entity.HealthCheckRecord">
+        <id property="id" column="id"/>
+        <result property="runId" column="run_id"/>
+        <result property="instanceName" column="instance_name"/>
+        <result property="status" column="status"/>
+        <result property="abnormalMetrics" column="abnormal_metrics"/>
+        <result property="llmSummary" column="llm_summary"/>
+        <result property="emailSent" column="email_sent"/>
+        <result property="recipients" column="recipients"/>
+        <result property="checkedAt" column="checked_at"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <insert id="insert"
+            parameterType="com.library.agent.entity.HealthCheckRecord"
+            useGeneratedKeys="true"
+            keyProperty="id">
+        INSERT INTO health_check_record
+        (
+            run_id,
+            instance_name,
+            status,
+            abnormal_metrics,
+            llm_summary,
+            email_sent,
+            recipients,
+            checked_at,
+            created_at
+        )
+        VALUES
+        (
+            #{runId},
+            #{instanceName},
+            #{status},
+            #{abnormalMetrics},
+            #{llmSummary},
+            COALESCE(#{emailSent}, FALSE),
+            #{recipients},
+            COALESCE(#{checkedAt}, CURRENT_TIMESTAMP),
+            COALESCE(#{createdAt}, CURRENT_TIMESTAMP)
+        )
+    </insert>
+
+    <select id="selectRecent" resultMap="HealthCheckRecordResultMap">
+        SELECT
+            id,
+            run_id,
+            instance_name,
+            status,
+            abnormal_metrics,
+            llm_summary,
+            email_sent,
+            recipients,
+            checked_at,
+            created_at
+        FROM health_check_record
+        ORDER BY checked_at DESC
+        LIMIT #{limit}
+    </select>
+
+</mapper>

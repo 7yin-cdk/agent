@@ -1,9 +1,13 @@
 package com.library.agent.conversation.controller;
 
+import com.library.agent.auth.context.UserContextHolder;
 import com.library.agent.conversation.dto.ConversationResponse;
 import com.library.agent.conversation.dto.CreateConversationRequest;
+import com.library.agent.conversation.dto.MessageResponse;
 import com.library.agent.conversation.dto.UpdateConversationTitleRequest;
 import com.library.agent.conversation.service.ConversationService;
+import com.library.agent.entity.AgentShortTermMemory;
+import com.library.agent.memory.ShortTermMemoryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,6 +29,7 @@ import java.util.List;
 public class ConversationController {
 
     private final ConversationService conversationService;
+    private final ShortTermMemoryService shortTermMemoryService;
 
     /**
      * 创建当前登录用户的新会话。
@@ -68,5 +73,26 @@ public class ConversationController {
     public String deleteConversation(@PathVariable String conversationId) {
         conversationService.deleteConversation(conversationId);
         return "delete success";
+    }
+
+    /**
+     * 查询指定会话的全部历史消息。
+     */
+    @GetMapping("/{conversationId}/messages")
+    public List<MessageResponse> listMessages(@PathVariable String conversationId) {
+        Long userId = UserContextHolder.getUserId();
+        conversationService.validateConversationOwner(userId, conversationId);
+        List<AgentShortTermMemory> messages =
+                shortTermMemoryService.listMessagesByConversation(userId, conversationId);
+        return messages.stream()
+                .map(m -> {
+                    MessageResponse r = new MessageResponse();
+                    r.setRole(m.getRole());
+                    r.setContent(m.getContent());
+                    r.setMessageOrder(m.getMessageOrder());
+                    r.setCreatedAt(m.getCreatedAt());
+                    return r;
+                })
+                .toList();
     }
 }

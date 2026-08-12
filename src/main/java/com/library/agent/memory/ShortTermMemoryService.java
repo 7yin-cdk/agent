@@ -23,6 +23,15 @@ public interface ShortTermMemoryService {
     List<AgentShortTermMemory> listRecentMessages(Long userId, String conversationId, int limit);
 
     /**
+     * 查询指定会话的全部消息（用于前端历史展示）。
+     *
+     * @param userId 当前登录用户 ID
+     * @param conversationId 会话 ID
+     * @return 按消息顺序正序排列的全部消息
+     */
+    List<AgentShortTermMemory> listMessagesByConversation(Long userId, String conversationId);
+
+    /**
      * 保存一条短期记忆消息。
      *
      * @param userId 当前登录用户 ID

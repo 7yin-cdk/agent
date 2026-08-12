@@ -4,7 +4,9 @@ import com.library.agent.beir.dto.BeirSearchHit;
 import com.library.agent.beir.dto.BeirSearchRequest;
 import com.library.agent.beir.dto.BeirSearchResponse;
 import com.library.agent.entity.RagChunkDocument;
+import com.library.agent.entity.TextChunk;
 import com.library.agent.llm.LlmService;
+import com.library.agent.mapper.TextChunkMapper;
 import lombok.RequiredArgsConstructor;
 import org.postgresql.util.PGobject;
 import org.springframework.data.domain.PageRequest;
@@ -18,6 +20,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -32,6 +35,7 @@ public class BeirScifactDocRetrievalService {
     private final LlmService llmService;
     private final ElasticsearchOperations elasticsearchOperations;
     private final JdbcTemplate jdbcTemplate;
+    private final TextChunkMapper textChunkMapper;
 
     public BeirSearchResponse search(BeirSearchRequest request) {
         if (request == null || request.getQuery() == null || request.getQuery().isBlank()) {
@@ -49,8 +53,43 @@ public class BeirScifactDocRetrievalService {
         List<ChunkCandidate> keywordChunks = searchKeywordChunks(query, keywordTopK);
 
         List<DocCandidate> docCandidates = mergeDocsByRrf(vectorChunks, keywordChunks, candidateTopK);
+        if (Boolean.TRUE.equals(request.getUseRerank())) {
+            docCandidates = rerankDocs(query, docCandidates, request);
+        }
         List<BeirSearchHit> hits = toHits(docCandidates, topK);
         return new BeirSearchResponse(hits);
+    }
+
+    private List<DocCandidate> rerankDocs(String query, List<DocCandidate> candidates, BeirSearchRequest request) {
+        if (candidates.isEmpty()) {
+            return candidates;
+        }
+
+        int rerankN = request.getRerankTopN() == null || request.getRerankTopN() <= 0
+                ? candidates.size()
+                : request.getRerankTopN();
+        int limit = Math.min(rerankN, candidates.size());
+        List<DocCandidate> topCandidates = candidates.subList(0, limit);
+
+        List<Long> chunkIds = topCandidates.stream()
+                .map(DocCandidate::chunkId)
+                .toList();
+        Map<Long, String> textById = textChunkMapper.selectByChunkIds(chunkIds).stream()
+                .collect(Collectors.toMap(TextChunk::getChunkId, TextChunk::getChunkText));
+        List<String> documents = chunkIds.stream()
+                .map(id -> textById.getOrDefault(id, ""))
+                .toList();
+
+        double minScore = request.getMinRerankScore() == null ? 0.0 : request.getMinRerankScore();
+        List<Integer> rerankedIndexes = llmService.rerank(query, documents, limit, minScore);
+
+        List<DocCandidate> reranked = new ArrayList<>();
+        for (Integer index : rerankedIndexes) {
+            if (index != null && index >= 0 && index < topCandidates.size()) {
+                reranked.add(topCandidates.get(index));
+            }
+        }
+        return reranked;
     }
 
     private int defaultIfInvalid(Integer value, int defaultValue) {

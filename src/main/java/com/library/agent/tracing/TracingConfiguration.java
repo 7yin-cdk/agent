@@ -10,9 +10,9 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import java.util.concurrent.Executor;
 
 /**
- * 全链路追踪统一配置。
+ * 异步线程池 Trace 传播配置。
  * <p>
- * 注册 MyBatis SQL 拦截器及异步线程池 Trace 传播装饰器。
+ * 仅保留异步任务的 traceId 传播能力，不注册任何数据库/缓存层面的拦截器。
  */
 @Configuration
 public class TracingConfiguration implements AsyncConfigurer {
@@ -23,21 +23,6 @@ public class TracingConfiguration implements AsyncConfigurer {
         this.tracer = tracer;
     }
 
-    /**
-     * MyBatis SQL 追踪拦截器。
-     * <p>
-     * MyBatis Spring Boot 自动发现所有 Interceptor 类型 Bean 并注册到 SqlSessionFactory。
-     */
-    @Bean
-    public MyBatisSqlTracingInterceptor myBatisSqlTracingInterceptor() {
-        return new MyBatisSqlTracingInterceptor(tracer);
-    }
-
-    /**
-     * 带 Trace 传播的 @Async 线程池。
-     * <p>
-     * 实现 AsyncConfigurer 后，@EnableAsync 会使用此配置替代默认 SimpleAsyncTaskExecutor。
-     */
     @Override
     public Executor getAsyncExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();

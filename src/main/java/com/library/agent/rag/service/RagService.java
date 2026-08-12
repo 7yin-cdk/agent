@@ -38,14 +38,20 @@ public interface RagService {
             List<AgentShortTermMemory> historyMessages
     );
 
-    void queryStream(
+    /**
+     * 流式 RAG 问答，返回构建的 prompt 供可观测采集。
+     */
+    String queryStream(
             String question,
             String conversationSummary,
             List<AgentShortTermMemory> historyMessages,
             Consumer<String> onDelta
     );
 
-    void queryStream(
+    /**
+     * 流式 RAG 问答（带查询改写），返回构建的 prompt 供可观测采集。
+     */
+    String queryStream(
             String question,
             String rewrittenQuestion,
             String conversationSummary,

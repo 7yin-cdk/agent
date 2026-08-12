@@ -6,9 +6,6 @@ import com.library.agent.llm.LlmService;
 import com.library.agent.mapper.AgentConversationSummaryMapper;
 import com.library.agent.mapper.AgentShortTermMemoryMapper;
 import com.library.agent.memory.ConversationSummaryService;
-import com.library.agent.tracing.TracingConstant;
-import io.micrometer.tracing.Span;
-import io.micrometer.tracing.Tracer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -29,7 +26,6 @@ public class ConversationSummaryServiceImpl implements ConversationSummaryServic
     private final AgentConversationSummaryMapper conversationSummaryMapper;
     private final AgentShortTermMemoryMapper shortTermMemoryMapper;
     private final LlmService llmService;
-    private final Tracer tracer;
 
     @Override
     public String getSummary(Long userId, String conversationId) {
@@ -50,20 +46,11 @@ public class ConversationSummaryServiceImpl implements ConversationSummaryServic
     @Async
     @Override
     public void triggerSummaryIfNeeded(Long userId, String conversationId) {
-        Span span = tracer.nextSpan()
-                .name(TracingConstant.ASYNC_SUMMARY)
-                .start();
-
-        try (Tracer.SpanInScope ignored = tracer.withSpan(span)) {
-            span.tag(TracingConstant.TAG_USER_ID, String.valueOf(userId));
-            span.tag(TracingConstant.TAG_CONVERSATION_ID, conversationId);
+        try {
             doTriggerSummaryIfNeeded(userId, conversationId);
         } catch (Exception e) {
-            span.error(e);
             log.warn("Failed to update conversation summary, userId={}, conversationId={}",
                     userId, conversationId, e);
-        } finally {
-            span.end();
         }
     }
 

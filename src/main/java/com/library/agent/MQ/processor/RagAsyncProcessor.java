@@ -10,9 +10,6 @@ import com.library.agent.llm.LlmService;
 import com.library.agent.mapper.TextChunkMapper;
 import com.library.agent.mapper.TextChunkVectorMapper;
 import com.library.agent.rag.service.DocumentParser;
-import com.library.agent.tracing.TracingConstant;
-import io.micrometer.tracing.Span;
-import io.micrometer.tracing.Tracer;
 import io.minio.GetObjectArgs;
 import io.minio.MinioClient;
 import lombok.RequiredArgsConstructor;
@@ -45,80 +42,31 @@ public class RagAsyncProcessor {
     private final MinioClient minioClient;
     private final DocumentParser documentParser;
     private final LlmService llmService;
-    private final Tracer tracer;
 
     public void process(RagIngestMessage message) {
         String bucketName = message.getBucketName();
         String objectName = message.getObjectName();
         Long fileId = message.getFileId();
 
-        Span processSpan = tracer.nextSpan()
-                .name(TracingConstant.RAG_ASYNC_PROCESS)
-                .start();
+        try (InputStream inputStream = minioClient.getObject(
+                GetObjectArgs.builder()
+                        .bucket(bucketName)
+                        .object(objectName)
+                        .build()
+        )) {
+            /* 1. 解析文档为纯文本 */
+            String text = documentParser.parse(inputStream);
 
-        try (Tracer.SpanInScope ignored = tracer.withSpan(processSpan)) {
-            processSpan.tag("rag.file_id", String.valueOf(fileId));
-            processSpan.tag("rag.bucket", bucketName);
-            processSpan.tag("rag.object", objectName);
+            /* 2. 分块 */
+            List<String> chunks = splitText(text);
 
-            try (InputStream inputStream = minioClient.getObject(
-                    GetObjectArgs.builder()
-                            .bucket(bucketName)
-                            .object(objectName)
-                            .build()
-            )) {
-                /* 1. 解析文档为纯文本 */
-                Span parseSpan = tracer.nextSpan()
-                        .name(TracingConstant.RAG_ASYNC_PARSE)
-                        .start();
-                String text;
-                try (Tracer.SpanInScope ps = tracer.withSpan(parseSpan)) {
-                    text = documentParser.parse(inputStream);
-                    parseSpan.tag("rag.text_length", String.valueOf(text.length()));
-                } finally {
-                    parseSpan.end();
-                }
+            /* 3. 分片文本向量化 */
+            List<List<Float>> embed = llmService.embed(chunks);
 
-                /* 2. 分块 */
-                Span chunkSpan = tracer.nextSpan()
-                        .name(TracingConstant.RAG_ASYNC_CHUNK)
-                        .start();
-                List<String> chunks;
-                try (Tracer.SpanInScope cs = tracer.withSpan(chunkSpan)) {
-                    chunks = splitText(text);
-                    chunkSpan.tag("rag.chunk_count", String.valueOf(chunks.size()));
-                } finally {
-                    chunkSpan.end();
-                }
-
-                /* 3. 分片文本向量化 */
-                Span embedSpan = tracer.nextSpan()
-                        .name(TracingConstant.RAG_ASYNC_EMBED)
-                        .start();
-                List<List<Float>> embed;
-                try (Tracer.SpanInScope es = tracer.withSpan(embedSpan)) {
-                    embed = llmService.embed(chunks);
-                    embedSpan.tag("rag.embed_count", String.valueOf(embed.size()));
-                } finally {
-                    embedSpan.end();
-                }
-
-                /* 4. 分片和分片向量化结果入库 */
-                Span saveSpan = tracer.nextSpan()
-                        .name(TracingConstant.RAG_ASYNC_SAVE)
-                        .start();
-                try (Tracer.SpanInScope ss = tracer.withSpan(saveSpan)) {
-                    List<Long> chunkIds = saveChunks(fileId, chunks, embed);
-                    saveSpan.tag("rag.saved_chunk_count", String.valueOf(chunkIds.size()));
-                } finally {
-                    saveSpan.end();
-                }
-            }
+            /* 4. 分片和分片向量化结果入库 */
+            saveChunks(fileId, chunks, embed);
         } catch (Exception e) {
-            processSpan.error(e);
             System.out.println("异步任务执行失败");
-        } finally {
-            processSpan.end();
         }
     }
 

@@ -5,10 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.library.agent.llm.LlmService;
-import com.library.agent.tracing.TracingConstant;
-import io.micrometer.tracing.Span;
-import io.micrometer.tracing.Tracer;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -23,7 +19,6 @@ import java.util.List;
 import java.util.function.Consumer;
 
 @Service
-@RequiredArgsConstructor
 public class LlmServiceImpl implements LlmService {
 
 
@@ -54,34 +49,19 @@ public class LlmServiceImpl implements LlmService {
     @Value("${deepseek.api-key}")
     private String deepseekApiKey;
 
-    private final Tracer tracer;
+    private final ThreadLocal<TokenUsage> lastTokenUsage = new ThreadLocal<>();
 
     public String chat(String prompt) {
         if (prompt == null || prompt.trim().isEmpty()) {
             throw new RuntimeException("Prompt不能为空");
         }
 
-        Span span = tracer.nextSpan()
-                .name(TracingConstant.LLM_DEEPSEEK_CHAT)
-                .start();
+        lastTokenUsage.remove();
 
-        long startMs = System.currentTimeMillis();
-        try (Tracer.SpanInScope ignored = tracer.withSpan(span)) {
-            span.tag(TracingConstant.TAG_MODEL, chatModel);
-            span.tag(TracingConstant.TAG_PROMPT_LENGTH, String.valueOf(prompt.length()));
-
-            String result = doChat(prompt);
-
-            span.tag(TracingConstant.TAG_RESPONSE_LENGTH, String.valueOf(result.length()));
-            return result;
-
+        try {
+            return doChat(prompt);
         } catch (Exception e) {
-            span.error(e);
             throw new RuntimeException("百炼Chat失败", e);
-        } finally {
-            span.tag(TracingConstant.TAG_DURATION_MS,
-                    String.valueOf(System.currentTimeMillis() - startMs));
-            span.end();
         }
     }
 
@@ -94,24 +74,12 @@ public class LlmServiceImpl implements LlmService {
             throw new RuntimeException("onDelta cannot be null");
         }
 
-        Span span = tracer.nextSpan()
-                .name(TracingConstant.LLM_DEEPSEEK_CHAT_STREAM)
-                .start();
+        lastTokenUsage.remove();
 
-        long startMs = System.currentTimeMillis();
-        try (Tracer.SpanInScope ignored = tracer.withSpan(span)) {
-            span.tag(TracingConstant.TAG_MODEL, chatModel);
-            span.tag(TracingConstant.TAG_PROMPT_LENGTH, String.valueOf(prompt.length()));
-
+        try {
             doChatStream(prompt, onDelta);
-
         } catch (Exception e) {
-            span.error(e);
             throw new RuntimeException("Streaming chat failed", e);
-        } finally {
-            span.tag(TracingConstant.TAG_DURATION_MS,
-                    String.valueOf(System.currentTimeMillis() - startMs));
-            span.end();
         }
     }
 
@@ -119,28 +87,10 @@ public class LlmServiceImpl implements LlmService {
         if (texts == null || texts.isEmpty()) {
             return new ArrayList<>();
         }
-
-        Span span = tracer.nextSpan()
-                .name(TracingConstant.LLM_BAILIAN_EMBED)
-                .start();
-
-        long startMs = System.currentTimeMillis();
-        try (Tracer.SpanInScope ignored = tracer.withSpan(span)) {
-            span.tag(TracingConstant.TAG_MODEL, embeddingModel);
-            span.tag("gen_ai.input.count", String.valueOf(texts.size()));
-
-            List<List<Float>> result = doEmbed(texts);
-
-            span.tag("gen_ai.output.count", String.valueOf(result.size()));
-            return result;
-
+        try {
+            return doEmbed(texts);
         } catch (Exception e) {
-            span.error(e);
             throw new RuntimeException("百炼Embedding失败", e);
-        } finally {
-            span.tag(TracingConstant.TAG_DURATION_MS,
-                    String.valueOf(System.currentTimeMillis() - startMs));
-            span.end();
         }
     }
 
@@ -165,29 +115,10 @@ public class LlmServiceImpl implements LlmService {
         if (documents == null || documents.isEmpty()) {
             return new ArrayList<>();
         }
-
-        Span span = tracer.nextSpan()
-                .name(TracingConstant.LLM_BAILIAN_RERANK)
-                .start();
-
-        long startMs = System.currentTimeMillis();
-        try (Tracer.SpanInScope ignored = tracer.withSpan(span)) {
-            span.tag(TracingConstant.TAG_MODEL, rerankModel);
-            span.tag("gen_ai.rerank.document_count", String.valueOf(documents.size()));
-            span.tag("gen_ai.rerank.top_n", String.valueOf(topN));
-
-            List<Integer> result = doRerank(query, documents, topN, minScore);
-
-            span.tag("gen_ai.rerank.result_count", String.valueOf(result.size()));
-            return result;
-
+        try {
+            return doRerank(query, documents, topN, minScore);
         } catch (Exception e) {
-            span.error(e);
             throw new RuntimeException("Qwen3 rerank failed", e);
-        } finally {
-            span.tag(TracingConstant.TAG_DURATION_MS,
-                    String.valueOf(System.currentTimeMillis() - startMs));
-            span.end();
         }
     }
 
@@ -249,6 +180,7 @@ public class LlmServiceImpl implements LlmService {
 
             String responseStr = response.toString();
             JsonNode root = objectMapper.readTree(responseStr);
+            extractTokenUsage(root);
 
             if (root.has("error")) {
                 throw new RuntimeException("Chat失败: " + root.get("error").toString());
@@ -347,6 +279,9 @@ public class LlmServiceImpl implements LlmService {
                     }
 
                     JsonNode root = objectMapper.readTree(data);
+                    if (root.has("usage")) {
+                        extractTokenUsage(root);
+                    }
                     if (root.has("error")) {
                         throw new RuntimeException("Chat failed: " + root.get("error").toString());
                     }
@@ -584,5 +519,34 @@ public class LlmServiceImpl implements LlmService {
         } catch (Exception e) {
             throw new RuntimeException("Qwen3 rerank failed", e);
         }
+    }
+
+    /* ==================== Token Usage 提取 ==================== */
+
+    /**
+     * 从 DeepSeek API 响应的 JSON 中提取 usage 字段。
+     * <p>
+     * usage 格式为 {"prompt_tokens": N, "completion_tokens": M, "total_tokens": T}，
+     * 流式调用时仅最后一个 SSE chunk 包含此字段。
+     */
+    private void extractTokenUsage(JsonNode root) {
+        JsonNode usage = root.get("usage");
+        if (usage == null) {
+            return;
+        }
+        int inputTokens = usage.path("prompt_tokens").asInt(0);
+        int outputTokens = usage.path("completion_tokens").asInt(0);
+        int totalTokens = usage.path("total_tokens").asInt(0);
+        lastTokenUsage.set(new TokenUsage(inputTokens, outputTokens, totalTokens));
+    }
+
+    @Override
+    public TokenUsage getLastTokenUsage() {
+        return lastTokenUsage.get();
+    }
+
+    @Override
+    public void clearLastTokenUsage() {
+        lastTokenUsage.remove();
     }
 }

@@ -6,6 +6,25 @@ import java.util.function.Consumer;
 public interface LlmService {
 
     /**
+     * 单次 LLM 调用的 Token 用量统计。
+     */
+    class TokenUsage {
+        private final int inputTokens;
+        private final int outputTokens;
+        private final int totalTokens;
+
+        public TokenUsage(int inputTokens, int outputTokens, int totalTokens) {
+            this.inputTokens = inputTokens;
+            this.outputTokens = outputTokens;
+            this.totalTokens = totalTokens;
+        }
+
+        public int getInputTokens() { return inputTokens; }
+        public int getOutputTokens() { return outputTokens; }
+        public int getTotalTokens() { return totalTokens; }
+    }
+
+    /**
      * 用户提问与大模型交互
      * @param prompt 组装后的prompt
      * @return
@@ -50,4 +69,17 @@ public interface LlmService {
      * @return 文档原始下标
      */
     List<Integer> rerank(String query, List<String> documents, int topN, double minScore);
+
+    /**
+     * 获取最后一次 LLM 调用的 Token 用量。
+     * <p>
+     * 在 chat() 或 chatStream() 调用后通过 ThreadLocal 获取，
+     * 调用 clearLastTokenUsage() 清理。
+     */
+    TokenUsage getLastTokenUsage();
+
+    /**
+     * 清理最后一次 LLM 调用的 Token 用量记录。
+     */
+    void clearLastTokenUsage();
 }

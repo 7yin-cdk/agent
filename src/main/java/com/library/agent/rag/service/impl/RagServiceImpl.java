@@ -12,9 +12,6 @@ import com.library.agent.mapper.FileMetadataMapper;
 import com.library.agent.mapper.TextChunkMapper;
 import com.library.agent.mapper.TextChunkVectorMapper;
 import com.library.agent.rag.service.RagService;
-import com.library.agent.tracing.TracingConstant;
-import io.micrometer.tracing.Span;
-import io.micrometer.tracing.Tracer;
 import io.minio.BucketExistsArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
@@ -44,7 +41,6 @@ public class RagServiceImpl implements RagService {
     private final TextChunkVectorMapper textChunkVectorMapper;
     private final TextChunkMapper textChunkMapper;
     private final KeywordSearchService keywordSearchService;
-    private final Tracer tracer;
 
     /**
      * MinIO 存储桶名称。
@@ -112,17 +108,17 @@ public class RagServiceImpl implements RagService {
     }
 
     @Override
-    public void queryStream(
+    public String queryStream(
             String text,
             String conversationSummary,
             List<AgentShortTermMemory> historyMessages,
             Consumer<String> onDelta
     ) {
-        queryStream(text, text, conversationSummary, historyMessages, onDelta);
+        return queryStream(text, text, conversationSummary, historyMessages, onDelta);
     }
 
     @Override
-    public void queryStream(
+    public String queryStream(
             String text,
             String rewrittenQuestion,
             String conversationSummary,
@@ -132,6 +128,7 @@ public class RagServiceImpl implements RagService {
         String prompt = buildRagPrompt(text, rewrittenQuestion, conversationSummary, historyMessages);
         // TODO LLM调用超时时采用下一个LLM
         llmService.chatStream(prompt, onDelta);
+        return prompt;
     }
 
     private String buildRagPrompt(
@@ -142,61 +139,22 @@ public class RagServiceImpl implements RagService {
     ) {
         String retrievalQuestion = normalizeRetrievalQuestion(text, rewrittenQuestion);
 
-        /* Span 1: 查询向量化 */
-        Span embedSpan = tracer.nextSpan()
-                .name(TracingConstant.RAG_EMBED_QUERY)
-                .start();
-        List<Float> embed;
-        try (Tracer.SpanInScope ignored = tracer.withSpan(embedSpan)) {
-            embed = llmService.embed(retrievalQuestion);
-            embedSpan.tag("embedding.dimensions", String.valueOf(embed.size()));
-        } finally {
-            embedSpan.end();
-        }
+        /* 查询向量化 */
+        List<Float> embed = llmService.embed(retrievalQuestion);
 
         float[] vector = new float[embed.size()];
         for (int i = 0; i < embed.size(); i++) {
             vector[i] = embed.get(i);
         }
 
-        /* Span 2: pgvector 向量检索 */
-        Span vectorSpan = tracer.nextSpan()
-                .name(TracingConstant.RAG_VECTOR_SEARCH)
-                .start();
-        List<Long> vectorIds;
-        try (Tracer.SpanInScope ignored = tracer.withSpan(vectorSpan)) {
-            vectorIds = textChunkVectorMapper.selectTopKChunkIds(vector, 100);
-            vectorSpan.tag("rag.top_k", "100");
-            vectorSpan.tag("rag.result_count", String.valueOf(vectorIds.size()));
-        } finally {
-            vectorSpan.end();
-        }
+        /* pgvector 向量检索 */
+        List<Long> vectorIds = textChunkVectorMapper.selectTopKChunkIds(vector, 100);
 
-        /* Span 3: ES 关键词检索 */
-        Span keywordSpan = tracer.nextSpan()
-                .name(TracingConstant.RAG_KEYWORD_SEARCH)
-                .start();
-        List<Long> keywordChunkIds;
-        try (Tracer.SpanInScope ignored = tracer.withSpan(keywordSpan)) {
-            keywordChunkIds = keywordSearchService.searchChunkIds(retrievalQuestion, 100);
-            keywordSpan.tag("rag.top_k", "100");
-            keywordSpan.tag("rag.result_count", String.valueOf(keywordChunkIds.size()));
-        } finally {
-            keywordSpan.end();
-        }
+        /* ES 关键词检索 */
+        List<Long> keywordChunkIds = keywordSearchService.searchChunkIds(retrievalQuestion, 100);
 
-        /* Span 4: RRF 融合 */
-        Span rrfSpan = tracer.nextSpan()
-                .name(TracingConstant.RAG_RRF_MERGE)
-                .start();
-        List<Long> chunkIds;
-        try (Tracer.SpanInScope ignored = tracer.withSpan(rrfSpan)) {
-            chunkIds = mergeByRrf(vectorIds, keywordChunkIds, 80);
-            rrfSpan.tag("rag.limit", "80");
-            rrfSpan.tag("rag.result_count", String.valueOf(chunkIds.size()));
-        } finally {
-            rrfSpan.end();
-        }
+        /* RRF 融合 */
+        List<Long> chunkIds = mergeByRrf(vectorIds, keywordChunkIds, 80);
 
         List<TextChunk> textChunks = textChunkMapper.selectByChunkIds(chunkIds);
         List<String> chunks = new ArrayList<>();
@@ -204,33 +162,16 @@ public class RagServiceImpl implements RagService {
             chunks.add(textChunk.getChunkText());
         }
 
-        /* Span 5: 重排序 */
-        Span rerankSpan = tracer.nextSpan()
-                .name(TracingConstant.RAG_RERANK)
-                .start();
-        List<Integer> rerankChunkIds;
-        try (Tracer.SpanInScope ignored = tracer.withSpan(rerankSpan)) {
-            rerankChunkIds = llmService.rerank(retrievalQuestion, chunks, 5, 0.7);
-            rerankSpan.tag("rag.top_n", "5");
-            rerankSpan.tag("rag.result_count", String.valueOf(rerankChunkIds.size()));
-        } finally {
-            rerankSpan.end();
-        }
+        /* 重排序 */
+        List<Integer> rerankChunkIds = llmService.rerank(retrievalQuestion, chunks, 5, 0.7);
 
         List<String> rerankChunks = new ArrayList<>();
         for (Integer rerankChunkId : rerankChunkIds) {
             rerankChunks.add(chunks.get(rerankChunkId));
         }
 
-        /* Span 6: 构建 RAG Prompt */
-        Span buildSpan = tracer.nextSpan()
-                .name(TracingConstant.RAG_BUILD_PROMPT)
-                .start();
-        try (Tracer.SpanInScope ignored = tracer.withSpan(buildSpan)) {
-            return PromptBuilder.buildRagPrompt(text, retrievalQuestion, conversationSummary, historyMessages, rerankChunks);
-        } finally {
-            buildSpan.end();
-        }
+        /* 构建 RAG Prompt */
+        return PromptBuilder.buildRagPrompt(text, retrievalQuestion, conversationSummary, historyMessages, rerankChunks);
     }
 
     private String normalizeRetrievalQuestion(String text, String rewrittenQuestion) {

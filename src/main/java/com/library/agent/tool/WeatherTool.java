@@ -53,7 +53,7 @@ public class WeatherTool {
                     + "?location=" + locationId
                     + "&key=" + API_KEY;
 
-            String weatherResp = HttpUtil.get(weatherUrl);
+            String weatherResp = HttpUtil.createGet(weatherUrl).timeout(10000).execute().body();
 
             JsonNode weatherJson =
                     objectMapper.readTree(weatherResp);
@@ -111,7 +111,7 @@ public class WeatherTool {
                 + "?location=" + encodedCity
                 + "&key=" + API_KEY;
 
-        String geoResp = HttpUtil.get(geoUrl);
+        String geoResp = HttpUtil.createGet(geoUrl).timeout(10000).execute().body();
 
         JsonNode geoJson =
                 objectMapper.readTree(geoResp);

@@ -57,6 +57,17 @@ public class ShortTermMemoryServiceImpl implements ShortTermMemoryService {
     }
 
     /**
+     * 查询指定会话的全部消息（上限 200 条），用于前端历史展示。
+     */
+    @Override
+    public List<AgentShortTermMemory> listMessagesByConversation(Long userId, String conversationId) {
+        if (userId == null || conversationId == null || conversationId.isBlank()) {
+            return List.of();
+        }
+        return shortTermMemoryMapper.selectRecentMessages(String.valueOf(userId), conversationId, 200);
+    }
+
+    /**
      * 保存单条会话消息。
      */
     @Override

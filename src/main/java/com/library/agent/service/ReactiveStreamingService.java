@@ -12,8 +12,9 @@ import com.library.agent.llm.QueryRewriteService;
 import com.library.agent.llm.ToolCallingService;
 import com.library.agent.memory.ConversationSummaryService;
 import com.library.agent.memory.ShortTermMemoryService;
+import com.library.agent.observability.ConversationTraceCollector;
+import com.library.agent.observability.ConversationTraceService;
 import com.library.agent.rag.service.RagService;
-import com.library.agent.tracing.TracingConstant;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.Tracer;
 import lombok.RequiredArgsConstructor;
@@ -48,6 +49,7 @@ public class ReactiveStreamingService {
     private final ConversationSummaryService conversationSummaryService;
     private final ToolCallingService toolCallingService;
     private final QueryRewriteService queryRewriteService;
+    private final ConversationTraceService traceService;
     private final Tracer tracer;
 
     /**
@@ -80,6 +82,10 @@ public class ReactiveStreamingService {
                 log.error("Reactive chat failed, userId={}, convId={}", userId, conversationId, e);
                 sendEvent(emitter, "error",
                         Map.of("message", e.getMessage() == null ? "Stream failed" : e.getMessage()));
+                try {
+                    ConversationTraceCollector errCollector = new ConversationTraceCollector(userId, conversationId, query);
+                    traceService.save(errCollector, "ERROR", e.getMessage());
+                } catch (Exception ignored) { }
                 emitter.complete();
             } finally {
                 UserContextHolder.clear();
@@ -91,13 +97,17 @@ public class ReactiveStreamingService {
     }
 
     private void doChatAndStream(Long userId, String conversationId, String query, SseEmitter emitter) {
+        /* 0. 创建可观测采集器 */
+        ConversationTraceCollector collector = new ConversationTraceCollector(userId, conversationId, query);
+
         /* 1. 加载历史 + 摘要 */
         List<AgentShortTermMemory> historyMessages =
                 shortTermMemoryService.listRecentMessages(userId, conversationId, ANSWER_HISTORY_LIMIT);
         String summary = conversationSummaryService.getSummary(userId, conversationId);
 
         /* 2. 意图识别 */
-        IntentType intentType = identifyIntent(query, limitHistoryForIntent(historyMessages));
+        IntentType intentType = identifyIntent(query, limitHistoryForIntent(historyMessages), collector);
+        collector.setIntentType(intentType.name());
 
         /* 3. 查询改写 */
         QueryRewriteResult rewriteResult =
@@ -119,7 +129,7 @@ public class ReactiveStreamingService {
 
         /* 6. 流式路由 */
         StringBuilder fullAnswer = new StringBuilder();
-        routeStream(intentType, context, token -> {
+        routeStream(intentType, context, collector, token -> {
             fullAnswer.append(token);
             sendEvent(emitter, "delta", Map.of("content", token));
         });
@@ -130,7 +140,10 @@ public class ReactiveStreamingService {
                 Map.of("intentType", intentType.name()),
                 Map.of("intentType", intentType.name()));
 
-        /* 8. done 事件 */
+        /* 8. 保存可观测数据 */
+        traceService.save(collector, "SUCCESS", null);
+
+        /* 9. done 事件 */
         sendEvent(emitter, "done", Map.of(
                 "conversationId", conversationId,
                 "answer", fullAnswer.toString()
@@ -144,30 +157,43 @@ public class ReactiveStreamingService {
      * COMPLEX_TASK 走 ReAct 阻塞调用，拿到完整答案后分块以打字机效果输出。
      */
     private void routeStream(IntentType intentType, AgentChatContext context,
+                             ConversationTraceCollector collector,
                              java.util.function.Consumer<String> onDelta) {
         IntentType safeType = intentType == null ? IntentType.SIMPLE_CHAT : intentType;
 
         switch (safeType) {
-            case KNOWLEDGE_BASE -> ragService.queryStream(
-                    context.getQuery(),
-                    context.getRewrittenQuery(),
-                    context.getConversationSummary(),
-                    context.getHistoryMessages(),
-                    onDelta
-            );
+            case KNOWLEDGE_BASE -> {
+                String prompt = ragService.queryStream(
+                        context.getQuery(),
+                        context.getRewrittenQuery(),
+                        context.getConversationSummary(),
+                        context.getHistoryMessages(),
+                        onDelta
+                );
+                recordLlmStreamCall(collector, "RAG_GENERATE", prompt);
+            }
             case COMPLEX_TASK -> {
                 String routePrompt = PromptBuilder.buildRoutePrompt(
                         context.getQuery(),
                         context.getConversationSummary(),
                         context.getHistoryMessages());
+                long routeStart = System.currentTimeMillis();
                 String routeResult = llmService.chat(routePrompt);
+                long routeDuration = System.currentTimeMillis() - routeStart;
+                LlmService.TokenUsage routeUsage = llmService.getLastTokenUsage();
+                collector.recordLlmCall("deepseek", "ROUTE", routePrompt, routeResult,
+                        routeUsage != null ? routeUsage.getInputTokens() : 0,
+                        routeUsage != null ? routeUsage.getOutputTokens() : 0,
+                        routeDuration);
+                llmService.clearLastTokenUsage();
+
                 String taskPrompt;
                 try {
                     taskPrompt = PromptBuilder.buildTaskPrompt(context, routeResult);
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
-                String answer = toolCallingService.chatWithTasks(context, taskPrompt);
+                String answer = toolCallingService.chatWithTasks(context, taskPrompt, collector);
                 /* 分块输出，模拟打字机效果 */
                 streamChunks(answer, onDelta);
             }
@@ -177,8 +203,24 @@ public class ReactiveStreamingService {
                         context.getConversationSummary(),
                         context.getHistoryMessages());
                 llmService.chatStream(prompt, onDelta);
+                recordLlmStreamCall(collector, "SIMPLE_CHAT", prompt);
             }
         }
+    }
+
+    /**
+     * 记录一次流式 LLM 调用到采集器。
+     * <p>
+     * 在 chatStream 返回后调用，从 ThreadLocal 读取 token 用量。
+     */
+    private void recordLlmStreamCall(ConversationTraceCollector collector,
+                                     String callType, String prompt) {
+        LlmService.TokenUsage usage = llmService.getLastTokenUsage();
+        collector.recordLlmCall("deepseek", callType, prompt, "(streaming)",
+                usage != null ? usage.getInputTokens() : 0,
+                usage != null ? usage.getOutputTokens() : 0,
+                0);
+        llmService.clearLastTokenUsage();
     }
 
     /**
@@ -204,7 +246,8 @@ public class ReactiveStreamingService {
 
     /* ==================== 意图识别 ==================== */
 
-    private IntentType identifyIntent(String query, List<AgentShortTermMemory> history) {
+    private IntentType identifyIntent(String query, List<AgentShortTermMemory> history,
+                                       ConversationTraceCollector collector) {
         if (query == null || query.trim().isEmpty()) {
             return IntentType.SIMPLE_CHAT;
         }
@@ -233,7 +276,18 @@ public class ReactiveStreamingService {
 
         /* LLM 识别 */
         try {
-            String result = llmService.chat(buildIntentPrompt(query, history));
+            String intentPrompt = buildIntentPrompt(query, history);
+            long startMs = System.currentTimeMillis();
+            String result = llmService.chat(intentPrompt);
+            long duration = System.currentTimeMillis() - startMs;
+
+            LlmService.TokenUsage usage = llmService.getLastTokenUsage();
+            collector.recordLlmCall("deepseek", "INTENT", intentPrompt, result,
+                    usage != null ? usage.getInputTokens() : 0,
+                    usage != null ? usage.getOutputTokens() : 0,
+                    duration);
+            llmService.clearLastTokenUsage();
+
             log.info("Reactive LLM intent result: {}", result);
             for (IntentType t : IntentType.values()) {
                 if (result != null && result.toUpperCase(Locale.ROOT).contains(t.name())) return t;

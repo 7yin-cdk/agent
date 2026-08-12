@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(mvn clean *)"
+      "Bash(mvn clean *)",
+      "Bash(./.venv/Scripts/python.exe *)",
+      "Bash(./src/main/java/com/library/agent/beir_scifact_eval/.venv/Scripts/python.exe *)"
     ]
   }
 }

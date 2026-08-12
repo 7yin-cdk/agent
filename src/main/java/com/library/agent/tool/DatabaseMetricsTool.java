@@ -479,6 +479,7 @@ public class DatabaseMetricsTool {
         config.setIdleTimeout(300_000);
         config.setMaxLifetime(600_000);
         config.setConnectionTimeout(10_000);
+        config.addDataSourceProperty("socketTimeout", "20");
         return new HikariDataSource(config);
     }
 
