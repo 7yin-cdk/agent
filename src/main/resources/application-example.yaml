@@ -2,9 +2,9 @@ spring:
   application:
     name: Agent
   datasource:
-    url: jdbc:postgresql://localhost:5432/rag_db #填你的数据库url
-    username: your_username #填你的用户名
-    password: your_password #填你的密码
+    url:
+    username:
+    password:
     driver-class-name: org.postgresql.Driver
   servlet:
     multipart:
@@ -12,12 +12,26 @@ spring:
       max-request-size: 100MB
   data:
     redis:
-      host: localhost #填你的ip地址
-      port: 6379 #填你的端口
+      host: localhost
+      port: 6379
       database: 0
       timeout: 3000ms
   elasticsearch:
     uris: http://localhost:9200
+
+  mail:
+    host: smtp.qq.com
+    port: 465
+    username:
+    password:
+    protocol: smtps
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          ssl:
+            enable: true
+          auth: true
 
 mybatis:
   mapper-locations: classpath:mapper/*.xml
@@ -26,31 +40,73 @@ mybatis:
     map-underscore-to-camel-case: true
 
 minio:
-  endpoint: http://localhost:9000 #填你的minio地址
-  access-key:  your_access-key #填你的
-  secret-key:  your_secret-key #填你的
-  bucket: rag-bucket #填你的bucket
+  endpoint: http://localhost:9000
+  access-key:
+  secret-key:
+  bucket:
 
 bailian:
-  api-key: your_api-key  #你的百炼平台的api-key
-  embedding-url: your_embedding-url #你的向量模型url
-  embedding-model: your_embedding-model #你的向量模型
-  tool-chat-url: your_tool-chat-url #你的工具聊天模型
-  chat-url: your_chat-url #你的chat模型url
-  chat-model: your_chat-model #你的chat模型
-  rerank-url: your_rerank-url #你的rerank模型url
-  rerank-model: your_rerank-model #你的rerankmodel
+  api-key:
+  embedding-url: https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings
+  embedding-model: text-embedding-v4
+  chat-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  chat-model: qwen-plus
+  rerank-url: https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank
+  rerank-model: qwen3-rerank
+
+deepseek:
+  api-key:
+  chat-url: https://api.deepseek.com/chat/completions
+  chat-model: deepseek-v4-pro
 
 server:
   port: 8084
 
 rocketmq:
-  name-server: your_url #你的rocketmq的url
+  name-server: 127.0.0.1:9876
   producer:
     group: agent-producer-group
     send-message-timeout: 3000
+
+agent:
+  tool:
+    timeout-seconds: 30
+  healthcheck:
+    enabled: true
+    cron: "0 */1 * * * *"
+    targets:
+      - name: rag库
+        host: localhost
+        port: 5432
+        database: rag_db
+        username:
+        password:
+        emails:
+          -
+    thresholds:
+      buffer-hit-rate-min: 95
+      lock-waiting-max: 0
+      idle-in-transaction-max: 0
+      dead-tuple-ratio-max: 10
+      backend-write-ratio-max: 10
+      active-sessions-max: 100
+      replication-lag-bytes-max: 1048576
+      replication-lag-seconds-max: 60
 
 auth:
   token:
     expire-seconds: 604800
     redis-key-prefix: "agent:login:token:"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,tracings
+  tracing:
+    sampling:
+      probability: 1.0
+    baggage:
+      remote-fields:
+        - userId
+        - conversationId
