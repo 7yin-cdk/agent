@@ -1,0 +1,510 @@
+2026-09-02 23:19:15.410 [background-preinit] INFO  o.h.validator.internal.util.Version [traceId=,spanId=] - HV000001: Hibernate Validator 8.0.1.Final
+2026-09-02 23:19:15.441 [main] INFO  com.library.agent.AgentApplication [traceId=,spanId=] - Starting AgentApplication using Java 17.0.12 with PID 9008 (D:\MyProject\Agent\target\classes started by 郑钦 in D:\MyProject\Agent)
+2026-09-02 23:19:15.442 [main] INFO  com.library.agent.AgentApplication [traceId=,spanId=] - No active profile set, falling back to 1 default profile: "default"
+2026-09-02 23:19:16.407 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate [traceId=,spanId=] - Multiple Spring Data modules found, entering strict repository configuration mode
+2026-09-02 23:19:16.409 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate [traceId=,spanId=] - Bootstrapping Spring Data Elasticsearch repositories in DEFAULT mode.
+2026-09-02 23:19:16.560 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate [traceId=,spanId=] - Finished Spring Data repository scanning in 146 ms. Found 1 Elasticsearch repository interface.
+2026-09-02 23:19:16.565 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate [traceId=,spanId=] - Multiple Spring Data modules found, entering strict repository configuration mode
+2026-09-02 23:19:16.566 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate [traceId=,spanId=] - Bootstrapping Spring Data Reactive Elasticsearch repositories in DEFAULT mode.
+2026-09-02 23:19:16.573 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate [traceId=,spanId=] - Finished Spring Data repository scanning in 6 ms. Found 0 Reactive Elasticsearch repository interfaces.
+2026-09-02 23:19:16.583 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate [traceId=,spanId=] - Multiple Spring Data modules found, entering strict repository configuration mode
+2026-09-02 23:19:16.584 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate [traceId=,spanId=] - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2026-09-02 23:19:16.601 [main] INFO  o.s.d.r.c.RepositoryConfigurationExtensionSupport [traceId=,spanId=] - Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.library.agent.es.repository.RagChunkSearchRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-09-02 23:19:16.601 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate [traceId=,spanId=] - Finished Spring Data repository scanning in 8 ms. Found 0 Redis repository interfaces.
+2026-09-02 23:19:17.435 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer [traceId=,spanId=] - Tomcat initialized with port 8084 (http)
+2026-09-02 23:19:17.442 [main] INFO  o.a.coyote.http11.Http11NioProtocol [traceId=,spanId=] - Initializing ProtocolHandler ["http-nio-8084"]
+2026-09-02 23:19:17.453 [main] INFO  o.a.catalina.core.StandardService [traceId=,spanId=] - Starting service [Tomcat]
+2026-09-02 23:19:17.453 [main] INFO  o.a.catalina.core.StandardEngine [traceId=,spanId=] - Starting Servlet engine: [Apache Tomcat/10.1.20]
+2026-09-02 23:19:17.531 [main] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] [traceId=,spanId=] - Initializing Spring embedded WebApplicationContext
+2026-09-02 23:19:17.531 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext [traceId=,spanId=] - Root WebApplicationContext: initialization completed in 2057 ms
+2026-09-02 23:19:19.960 [main] INFO  o.a.r.s.a.RocketMQAutoConfiguration [traceId=,spanId=] - a producer (agent-producer-group) init on namesrv 127.0.0.1:9876
+2026-09-02 23:19:21.590 [main] INFO  o.a.r.s.s.RocketMQMessageListenerContainerRegistrar [traceId=,spanId=] - Register the listener to container, listenerBeanName:ragIngestConsumer, containerBeanName:org.apache.rocketmq.spring.support.DefaultRocketMQListenerContainer_1
+2026-09-02 23:19:21.681 [main] INFO  o.s.b.a.w.s.WelcomePageHandlerMapping [traceId=,spanId=] - Adding welcome page: class path resource [static/index.html]
+2026-09-02 23:19:21.938 [main] INFO  o.s.b.a.e.web.EndpointLinksResolver [traceId=,spanId=] - Exposing 2 endpoint(s) beneath base path '/actuator'
+2026-09-02 23:19:22.197 [main] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=,spanId=] - Registered ReAct tool, name=checkDatabaseHealth, method=DatabaseHealthCheckTool.checkDatabaseHealth
+2026-09-02 23:19:22.198 [main] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=,spanId=] - Registered ReAct tool, name=collectDatabaseMetrics, method=DatabaseMetricsTool.collectDatabaseMetrics
+2026-09-02 23:19:22.198 [main] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=,spanId=] - Registered ReAct tool, name=sendAlertEmail, method=EmailAlertTool.sendAlertEmail
+2026-09-02 23:19:22.198 [main] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=,spanId=] - Registered ReAct tool, name=resetSlowQueryStats, method=SlowQueryTool.resetSlowQueryStats
+2026-09-02 23:19:22.199 [main] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=,spanId=] - Registered ReAct tool, name=getTopSlowQueries, method=SlowQueryTool.getTopSlowQueries
+2026-09-02 23:19:22.199 [main] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=,spanId=] - Registered ReAct tool, name=getSqlExecutionPlan, method=SqlExecutionPlanTool.getSqlExecutionPlan
+2026-09-02 23:19:22.199 [main] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=,spanId=] - Registered ReAct tool, name=getWeather, method=WeatherTool.getWeather
+2026-09-02 23:19:22.243 [main] INFO  o.a.coyote.http11.Http11NioProtocol [traceId=,spanId=] - Starting ProtocolHandler ["http-nio-8084"]
+2026-09-02 23:19:22.251 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer [traceId=,spanId=] - Tomcat started on port 8084 (http) with context path ''
+2026-09-02 23:19:23.890 [main] INFO  o.a.r.s.s.DefaultRocketMQListenerContainer [traceId=,spanId=] - running container: DefaultRocketMQListenerContainer{consumerGroup='agent-rag-consumer-group', namespace='', namespaceV2='', nameServer='127.0.0.1:9876', topic='rag-ingest-topic', consumeMode=CONCURRENTLY, selectorType=TAG, selectorExpression='*', messageModel=CLUSTERING', tlsEnable=false, instanceName=DEFAULT}
+2026-09-02 23:19:23.902 [main] INFO  com.library.agent.AgentApplication [traceId=,spanId=] - Started AgentApplication in 8.877 seconds (process running for 9.427)
+2026-09-02 23:19:24.333 [RMI TCP Connection(1)-192.168.211.1] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] [traceId=,spanId=] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-09-02 23:19:24.334 [RMI TCP Connection(1)-192.168.211.1] INFO  o.s.web.servlet.DispatcherServlet [traceId=,spanId=] - Initializing Servlet 'dispatcherServlet'
+2026-09-02 23:19:24.334 [RMI TCP Connection(2)-192.168.211.1] INFO  com.zaxxer.hikari.HikariDataSource [traceId=,spanId=] - HikariPool-1 - Starting...
+2026-09-02 23:19:24.335 [RMI TCP Connection(1)-192.168.211.1] INFO  o.s.web.servlet.DispatcherServlet [traceId=,spanId=] - Completed initialization in 1 ms
+2026-09-02 23:19:24.449 [RMI TCP Connection(2)-192.168.211.1] INFO  com.zaxxer.hikari.pool.HikariPool [traceId=,spanId=] - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@30bda8c1
+2026-09-02 23:19:24.451 [RMI TCP Connection(2)-192.168.211.1] INFO  com.zaxxer.hikari.HikariDataSource [traceId=,spanId=] - HikariPool-1 - Start completed.
+2026-09-02 23:20:00.023 [scheduling-1] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=53a0870b4ff67071cff3916562c9b62a,spanId=9d81d83a850eee85] - ReAct step=1 input length=1543
+2026-09-02 23:20:01.847 [scheduling-1] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=53a0870b4ff67071cff3916562c9b62a,spanId=9d81d83a850eee85] - ReAct step=1 model output length=219
+2026-09-02 23:20:01.900 [scheduling-1] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=53a0870b4ff67071cff3916562c9b62a,spanId=9d81d83a850eee85] - ReAct step=2 input length=2093
+2026-09-02 23:20:07.245 [scheduling-1] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=53a0870b4ff67071cff3916562c9b62a,spanId=9d81d83a850eee85] - ReAct step=2 model output length=548
+2026-09-02 23:20:08.351 [tool-exec-] INFO  com.library.agent.mail.MailService [traceId=,spanId=] - 告警邮件发送成功 subject=[DB告警] rag库 2项指标异常, recipients=[2892294059@qq.com]
+2026-09-02 23:20:08.354 [scheduling-1] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=53a0870b4ff67071cff3916562c9b62a,spanId=9d81d83a850eee85] - ReAct step=3 input length=2754
+2026-09-02 23:20:11.330 [scheduling-1] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=53a0870b4ff67071cff3916562c9b62a,spanId=9d81d83a850eee85] - ReAct step=3 model output length=222
+2026-09-02 23:20:11.443 [scheduling-1] WARN  c.l.a.healthcheck.HealthCheckRunner [traceId=53a0870b4ff67071cff3916562c9b62a,spanId=9d81d83a850eee85] - 巡检 trace 持久化失败 runId=hc_1788362400022
+org.springframework.dao.DataIntegrityViolationException: 
+### Error updating database.  Cause: org.postgresql.util.PSQLException: ERROR: null value in column "user_id" of relation "agent_conversation_trace" violates not-null constraint
+  详细：Failing row contains (392, trace_dc7c82cff76d43aba4a024799f9290fa, null, hc_1788362400022, scheduled-healthcheck-hc_1788362400022, null, 2026-09-02 23:20:00.023563, 2026-09-02 23:20:11.340089, 11316, 2910, 404, 3314, 3, 2, SUCCESS, null, 2026-09-02 23:20:11.340089).
+### The error may exist in file [D:\MyProject\Agent\target\classes\mapper\ConversationTraceMapper.xml]
+### The error may involve com.library.agent.mapper.ConversationTraceMapper.insert-Inline
+### The error occurred while setting parameters
+### SQL: INSERT INTO agent_conversation_trace         (             trace_id,             user_id,             conversation_id,             user_query,             intent_type,             start_time,             end_time,             total_duration_ms,             total_input_tokens,             total_output_tokens,             total_tokens,             llm_call_count,             tool_call_count,             status,             error_message,             created_at         )         VALUES         (             ?,             ?,             ?,             ?,             ?,             ?,             ?,             ?,             COALESCE(?, 0),             COALESCE(?, 0),             COALESCE(?, 0),             COALESCE(?, 0),             COALESCE(?, 0),             COALESCE(?, 'SUCCESS'),             ?,             COALESCE(?, CURRENT_TIMESTAMP)         )
+### Cause: org.postgresql.util.PSQLException: ERROR: null value in column "user_id" of relation "agent_conversation_trace" violates not-null constraint
+  详细：Failing row contains (392, trace_dc7c82cff76d43aba4a024799f9290fa, null, hc_1788362400022, scheduled-healthcheck-hc_1788362400022, null, 2026-09-02 23:20:00.023563, 2026-09-02 23:20:11.340089, 11316, 2910, 404, 3314, 3, 2, SUCCESS, null, 2026-09-02 23:20:11.340089).
+; ERROR: null value in column "user_id" of relation "agent_conversation_trace" violates not-null constraint
+  详细：Failing row contains (392, trace_dc7c82cff76d43aba4a024799f9290fa, null, hc_1788362400022, scheduled-healthcheck-hc_1788362400022, null, 2026-09-02 23:20:00.023563, 2026-09-02 23:20:11.340089, 11316, 2910, 404, 3314, 3, 2, SUCCESS, null, 2026-09-02 23:20:11.340089).
+	at org.springframework.jdbc.support.SQLErrorCodeSQLExceptionTranslator.doTranslate(SQLErrorCodeSQLExceptionTranslator.java:258)
+	at org.springframework.jdbc.support.AbstractFallbackSQLExceptionTranslator.translate(AbstractFallbackSQLExceptionTranslator.java:107)
+	at org.mybatis.spring.MyBatisExceptionTranslator.translateExceptionIfPossible(MyBatisExceptionTranslator.java:92)
+	at org.mybatis.spring.SqlSessionTemplate$SqlSessionInterceptor.invoke(SqlSessionTemplate.java:439)
+	at jdk.proxy2/jdk.proxy2.$Proxy120.insert(Unknown Source)
+	at org.mybatis.spring.SqlSessionTemplate.insert(SqlSessionTemplate.java:272)
+	at org.apache.ibatis.binding.MapperMethod.execute(MapperMethod.java:62)
+	at org.apache.ibatis.binding.MapperProxy$PlainMethodInvoker.invoke(MapperProxy.java:141)
+	at org.apache.ibatis.binding.MapperProxy.invoke(MapperProxy.java:86)
+	at jdk.proxy2/jdk.proxy2.$Proxy135.insert(Unknown Source)
+	at com.library.agent.observability.ConversationTraceService.save(ConversationTraceService.java:35)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:354)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:196)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:163)
+	at org.springframework.aop.framework.CglibAopProxy$CglibMethodInvocation.proceed(CglibAopProxy.java:768)
+	at org.springframework.transaction.interceptor.TransactionInterceptor$1.proceedWithInvocation(TransactionInterceptor.java:123)
+	at org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:392)
+	at org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:119)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184)
+	at org.springframework.aop.framework.CglibAopProxy$CglibMethodInvocation.proceed(CglibAopProxy.java:768)
+	at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:720)
+	at com.library.agent.observability.ConversationTraceService$$SpringCGLIB$$0.save(<generated>)
+	at com.library.agent.healthcheck.HealthCheckRunner.runLlmReAct(HealthCheckRunner.java:177)
+	at com.library.agent.healthcheck.HealthCheckRunner.runOnce(HealthCheckRunner.java:76)
+	at com.library.agent.healthcheck.HealthCheckRunner.scheduledRun(HealthCheckRunner.java:59)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.runInternal(ScheduledMethodRunnable.java:130)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.lambda$run$2(ScheduledMethodRunnable.java:124)
+	at io.micrometer.observation.Observation.observe(Observation.java:499)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.run(ScheduledMethodRunnable.java:124)
+	at org.springframework.scheduling.support.DelegatingErrorHandlingRunnable.run(DelegatingErrorHandlingRunnable.java:54)
+	at org.springframework.scheduling.concurrent.ReschedulingRunnable.run(ReschedulingRunnable.java:96)
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:539)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:264)
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:304)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1136)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:635)
+	at java.base/java.lang.Thread.run(Thread.java:842)
+Caused by: org.postgresql.util.PSQLException: ERROR: null value in column "user_id" of relation "agent_conversation_trace" violates not-null constraint
+  详细：Failing row contains (392, trace_dc7c82cff76d43aba4a024799f9290fa, null, hc_1788362400022, scheduled-healthcheck-hc_1788362400022, null, 2026-09-02 23:20:00.023563, 2026-09-02 23:20:11.340089, 11316, 2910, 404, 3314, 3, 2, SUCCESS, null, 2026-09-02 23:20:11.340089).
+	at org.postgresql.core.v3.QueryExecutorImpl.receiveErrorResponse(QueryExecutorImpl.java:2713)
+	at org.postgresql.core.v3.QueryExecutorImpl.processResults(QueryExecutorImpl.java:2401)
+	at org.postgresql.core.v3.QueryExecutorImpl.execute(QueryExecutorImpl.java:368)
+	at org.postgresql.jdbc.PgStatement.executeInternal(PgStatement.java:498)
+	at org.postgresql.jdbc.PgStatement.execute(PgStatement.java:415)
+	at org.postgresql.jdbc.PgPreparedStatement.executeWithFlags(PgPreparedStatement.java:190)
+	at org.postgresql.jdbc.PgPreparedStatement.execute(PgPreparedStatement.java:177)
+	at com.zaxxer.hikari.pool.ProxyPreparedStatement.execute(ProxyPreparedStatement.java:44)
+	at com.zaxxer.hikari.pool.HikariProxyPreparedStatement.execute(HikariProxyPreparedStatement.java)
+	at org.apache.ibatis.executor.statement.PreparedStatementHandler.update(PreparedStatementHandler.java:48)
+	at org.apache.ibatis.executor.statement.RoutingStatementHandler.update(RoutingStatementHandler.java:75)
+	at org.apache.ibatis.executor.SimpleExecutor.doUpdate(SimpleExecutor.java:50)
+	at org.apache.ibatis.executor.BaseExecutor.update(BaseExecutor.java:117)
+	at org.apache.ibatis.executor.CachingExecutor.update(CachingExecutor.java:76)
+	at org.apache.ibatis.session.defaults.DefaultSqlSession.update(DefaultSqlSession.java:197)
+	at org.apache.ibatis.session.defaults.DefaultSqlSession.insert(DefaultSqlSession.java:184)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at org.mybatis.spring.SqlSessionTemplate$SqlSessionInterceptor.invoke(SqlSessionTemplate.java:425)
+	... 41 common frames omitted
+2026-09-02 23:20:11.478 [scheduling-1] INFO  c.l.a.healthcheck.HealthCheckRunner [traceId=53a0870b4ff67071cff3916562c9b62a,spanId=9d81d83a850eee85] - 巡检完成 runId=hc_1788362400022 instance=rag库 status=ANOMALY anomalies=2 emailSent=true
+2026-09-02 23:21:00.002 [scheduling-1] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=e82a58521007e88bfa9907cafb20ea23,spanId=7446726b9b3f8aed] - ReAct step=1 input length=1543
+2026-09-02 23:21:01.663 [scheduling-1] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=e82a58521007e88bfa9907cafb20ea23,spanId=7446726b9b3f8aed] - ReAct step=1 model output length=219
+2026-09-02 23:21:01.690 [scheduling-1] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=e82a58521007e88bfa9907cafb20ea23,spanId=7446726b9b3f8aed] - ReAct step=2 input length=2093
+2026-09-02 23:21:08.199 [scheduling-1] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=e82a58521007e88bfa9907cafb20ea23,spanId=7446726b9b3f8aed] - ReAct step=2 model output length=663
+2026-09-02 23:21:09.464 [tool-exec-] INFO  com.library.agent.mail.MailService [traceId=,spanId=] - 告警邮件发送成功 subject=[DB告警] rag库 2项指标异常, recipients=[2892294059@qq.com]
+2026-09-02 23:21:09.466 [scheduling-1] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=e82a58521007e88bfa9907cafb20ea23,spanId=7446726b9b3f8aed] - ReAct step=3 input length=2869
+2026-09-02 23:21:12.016 [scheduling-1] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=e82a58521007e88bfa9907cafb20ea23,spanId=7446726b9b3f8aed] - ReAct step=3 model output length=198
+2026-09-02 23:21:12.020 [scheduling-1] WARN  c.l.a.healthcheck.HealthCheckRunner [traceId=e82a58521007e88bfa9907cafb20ea23,spanId=7446726b9b3f8aed] - 巡检 trace 持久化失败 runId=hc_1788362460002
+org.springframework.dao.DataIntegrityViolationException: 
+### Error updating database.  Cause: org.postgresql.util.PSQLException: ERROR: null value in column "user_id" of relation "agent_conversation_trace" violates not-null constraint
+  详细：Failing row contains (393, trace_af0c38a38cc84dd18e808b12178ea839, null, hc_1788362460002, scheduled-healthcheck-hc_1788362460002, null, 2026-09-02 23:21:00.002182, 2026-09-02 23:21:12.018061, 12015, 2965, 439, 3404, 3, 2, SUCCESS, null, 2026-09-02 23:21:12.018061).
+### The error may exist in file [D:\MyProject\Agent\target\classes\mapper\ConversationTraceMapper.xml]
+### The error may involve com.library.agent.mapper.ConversationTraceMapper.insert-Inline
+### The error occurred while setting parameters
+### SQL: INSERT INTO agent_conversation_trace         (             trace_id,             user_id,             conversation_id,             user_query,             intent_type,             start_time,             end_time,             total_duration_ms,             total_input_tokens,             total_output_tokens,             total_tokens,             llm_call_count,             tool_call_count,             status,             error_message,             created_at         )         VALUES         (             ?,             ?,             ?,             ?,             ?,             ?,             ?,             ?,             COALESCE(?, 0),             COALESCE(?, 0),             COALESCE(?, 0),             COALESCE(?, 0),             COALESCE(?, 0),             COALESCE(?, 'SUCCESS'),             ?,             COALESCE(?, CURRENT_TIMESTAMP)         )
+### Cause: org.postgresql.util.PSQLException: ERROR: null value in column "user_id" of relation "agent_conversation_trace" violates not-null constraint
+  详细：Failing row contains (393, trace_af0c38a38cc84dd18e808b12178ea839, null, hc_1788362460002, scheduled-healthcheck-hc_1788362460002, null, 2026-09-02 23:21:00.002182, 2026-09-02 23:21:12.018061, 12015, 2965, 439, 3404, 3, 2, SUCCESS, null, 2026-09-02 23:21:12.018061).
+; ERROR: null value in column "user_id" of relation "agent_conversation_trace" violates not-null constraint
+  详细：Failing row contains (393, trace_af0c38a38cc84dd18e808b12178ea839, null, hc_1788362460002, scheduled-healthcheck-hc_1788362460002, null, 2026-09-02 23:21:00.002182, 2026-09-02 23:21:12.018061, 12015, 2965, 439, 3404, 3, 2, SUCCESS, null, 2026-09-02 23:21:12.018061).
+	at org.springframework.jdbc.support.SQLErrorCodeSQLExceptionTranslator.doTranslate(SQLErrorCodeSQLExceptionTranslator.java:258)
+	at org.springframework.jdbc.support.AbstractFallbackSQLExceptionTranslator.translate(AbstractFallbackSQLExceptionTranslator.java:107)
+	at org.mybatis.spring.MyBatisExceptionTranslator.translateExceptionIfPossible(MyBatisExceptionTranslator.java:92)
+	at org.mybatis.spring.SqlSessionTemplate$SqlSessionInterceptor.invoke(SqlSessionTemplate.java:439)
+	at jdk.proxy2/jdk.proxy2.$Proxy120.insert(Unknown Source)
+	at org.mybatis.spring.SqlSessionTemplate.insert(SqlSessionTemplate.java:272)
+	at org.apache.ibatis.binding.MapperMethod.execute(MapperMethod.java:62)
+	at org.apache.ibatis.binding.MapperProxy$PlainMethodInvoker.invoke(MapperProxy.java:141)
+	at org.apache.ibatis.binding.MapperProxy.invoke(MapperProxy.java:86)
+	at jdk.proxy2/jdk.proxy2.$Proxy135.insert(Unknown Source)
+	at com.library.agent.observability.ConversationTraceService.save(ConversationTraceService.java:35)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:354)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:196)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:163)
+	at org.springframework.aop.framework.CglibAopProxy$CglibMethodInvocation.proceed(CglibAopProxy.java:768)
+	at org.springframework.transaction.interceptor.TransactionInterceptor$1.proceedWithInvocation(TransactionInterceptor.java:123)
+	at org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:392)
+	at org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:119)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184)
+	at org.springframework.aop.framework.CglibAopProxy$CglibMethodInvocation.proceed(CglibAopProxy.java:768)
+	at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:720)
+	at com.library.agent.observability.ConversationTraceService$$SpringCGLIB$$0.save(<generated>)
+	at com.library.agent.healthcheck.HealthCheckRunner.runLlmReAct(HealthCheckRunner.java:177)
+	at com.library.agent.healthcheck.HealthCheckRunner.runOnce(HealthCheckRunner.java:76)
+	at com.library.agent.healthcheck.HealthCheckRunner.scheduledRun(HealthCheckRunner.java:59)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.runInternal(ScheduledMethodRunnable.java:130)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.lambda$run$2(ScheduledMethodRunnable.java:124)
+	at io.micrometer.observation.Observation.observe(Observation.java:499)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.run(ScheduledMethodRunnable.java:124)
+	at org.springframework.scheduling.support.DelegatingErrorHandlingRunnable.run(DelegatingErrorHandlingRunnable.java:54)
+	at org.springframework.scheduling.concurrent.ReschedulingRunnable.run(ReschedulingRunnable.java:96)
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:539)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:264)
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:304)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1136)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:635)
+	at java.base/java.lang.Thread.run(Thread.java:842)
+Caused by: org.postgresql.util.PSQLException: ERROR: null value in column "user_id" of relation "agent_conversation_trace" violates not-null constraint
+  详细：Failing row contains (393, trace_af0c38a38cc84dd18e808b12178ea839, null, hc_1788362460002, scheduled-healthcheck-hc_1788362460002, null, 2026-09-02 23:21:00.002182, 2026-09-02 23:21:12.018061, 12015, 2965, 439, 3404, 3, 2, SUCCESS, null, 2026-09-02 23:21:12.018061).
+	at org.postgresql.core.v3.QueryExecutorImpl.receiveErrorResponse(QueryExecutorImpl.java:2713)
+	at org.postgresql.core.v3.QueryExecutorImpl.processResults(QueryExecutorImpl.java:2401)
+	at org.postgresql.core.v3.QueryExecutorImpl.execute(QueryExecutorImpl.java:368)
+	at org.postgresql.jdbc.PgStatement.executeInternal(PgStatement.java:498)
+	at org.postgresql.jdbc.PgStatement.execute(PgStatement.java:415)
+	at org.postgresql.jdbc.PgPreparedStatement.executeWithFlags(PgPreparedStatement.java:190)
+	at org.postgresql.jdbc.PgPreparedStatement.execute(PgPreparedStatement.java:177)
+	at com.zaxxer.hikari.pool.ProxyPreparedStatement.execute(ProxyPreparedStatement.java:44)
+	at com.zaxxer.hikari.pool.HikariProxyPreparedStatement.execute(HikariProxyPreparedStatement.java)
+	at org.apache.ibatis.executor.statement.PreparedStatementHandler.update(PreparedStatementHandler.java:48)
+	at org.apache.ibatis.executor.statement.RoutingStatementHandler.update(RoutingStatementHandler.java:75)
+	at org.apache.ibatis.executor.SimpleExecutor.doUpdate(SimpleExecutor.java:50)
+	at org.apache.ibatis.executor.BaseExecutor.update(BaseExecutor.java:117)
+	at org.apache.ibatis.executor.CachingExecutor.update(CachingExecutor.java:76)
+	at org.apache.ibatis.session.defaults.DefaultSqlSession.update(DefaultSqlSession.java:197)
+	at org.apache.ibatis.session.defaults.DefaultSqlSession.insert(DefaultSqlSession.java:184)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at org.mybatis.spring.SqlSessionTemplate$SqlSessionInterceptor.invoke(SqlSessionTemplate.java:425)
+	... 41 common frames omitted
+2026-09-02 23:21:12.048 [scheduling-1] INFO  c.l.a.healthcheck.HealthCheckRunner [traceId=e82a58521007e88bfa9907cafb20ea23,spanId=7446726b9b3f8aed] - 巡检完成 runId=hc_1788362460002 instance=rag库 status=ANOMALY anomalies=2 emailSent=true
+2026-09-02 23:22:00.002 [scheduling-1] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=840f51fc500ed656cb30c9da7612ada1,spanId=4fba410cfefac003] - ReAct step=1 input length=1543
+2026-09-02 23:22:02.248 [scheduling-1] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=840f51fc500ed656cb30c9da7612ada1,spanId=4fba410cfefac003] - ReAct step=1 model output length=219
+2026-09-02 23:22:02.272 [scheduling-1] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=840f51fc500ed656cb30c9da7612ada1,spanId=4fba410cfefac003] - ReAct step=2 input length=2093
+2026-09-02 23:22:08.336 [scheduling-1] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=840f51fc500ed656cb30c9da7612ada1,spanId=4fba410cfefac003] - ReAct step=2 model output length=640
+2026-09-02 23:22:09.474 [tool-exec-] INFO  com.library.agent.mail.MailService [traceId=,spanId=] - 告警邮件发送成功 subject=[DB告警] rag库 2项指标异常, recipients=[2892294059@qq.com]
+2026-09-02 23:22:09.475 [scheduling-1] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=840f51fc500ed656cb30c9da7612ada1,spanId=4fba410cfefac003] - ReAct step=3 input length=2846
+2026-09-02 23:22:11.967 [scheduling-1] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=840f51fc500ed656cb30c9da7612ada1,spanId=4fba410cfefac003] - ReAct step=3 model output length=198
+2026-09-02 23:22:11.970 [scheduling-1] WARN  c.l.a.healthcheck.HealthCheckRunner [traceId=840f51fc500ed656cb30c9da7612ada1,spanId=4fba410cfefac003] - 巡检 trace 持久化失败 runId=hc_1788362520002
+org.springframework.dao.DataIntegrityViolationException: 
+### Error updating database.  Cause: org.postgresql.util.PSQLException: ERROR: null value in column "user_id" of relation "agent_conversation_trace" violates not-null constraint
+  详细：Failing row contains (394, trace_cc547c32b2834f289f87cd70b1405363, null, hc_1788362520002, scheduled-healthcheck-hc_1788362520002, null, 2026-09-02 23:22:00.002307, 2026-09-02 23:22:11.968862, 11966, 2948, 422, 3370, 3, 2, SUCCESS, null, 2026-09-02 23:22:11.968862).
+### The error may exist in file [D:\MyProject\Agent\target\classes\mapper\ConversationTraceMapper.xml]
+### The error may involve com.library.agent.mapper.ConversationTraceMapper.insert-Inline
+### The error occurred while setting parameters
+### SQL: INSERT INTO agent_conversation_trace         (             trace_id,             user_id,             conversation_id,             user_query,             intent_type,             start_time,             end_time,             total_duration_ms,             total_input_tokens,             total_output_tokens,             total_tokens,             llm_call_count,             tool_call_count,             status,             error_message,             created_at         )         VALUES         (             ?,             ?,             ?,             ?,             ?,             ?,             ?,             ?,             COALESCE(?, 0),             COALESCE(?, 0),             COALESCE(?, 0),             COALESCE(?, 0),             COALESCE(?, 0),             COALESCE(?, 'SUCCESS'),             ?,             COALESCE(?, CURRENT_TIMESTAMP)         )
+### Cause: org.postgresql.util.PSQLException: ERROR: null value in column "user_id" of relation "agent_conversation_trace" violates not-null constraint
+  详细：Failing row contains (394, trace_cc547c32b2834f289f87cd70b1405363, null, hc_1788362520002, scheduled-healthcheck-hc_1788362520002, null, 2026-09-02 23:22:00.002307, 2026-09-02 23:22:11.968862, 11966, 2948, 422, 3370, 3, 2, SUCCESS, null, 2026-09-02 23:22:11.968862).
+; ERROR: null value in column "user_id" of relation "agent_conversation_trace" violates not-null constraint
+  详细：Failing row contains (394, trace_cc547c32b2834f289f87cd70b1405363, null, hc_1788362520002, scheduled-healthcheck-hc_1788362520002, null, 2026-09-02 23:22:00.002307, 2026-09-02 23:22:11.968862, 11966, 2948, 422, 3370, 3, 2, SUCCESS, null, 2026-09-02 23:22:11.968862).
+	at org.springframework.jdbc.support.SQLErrorCodeSQLExceptionTranslator.doTranslate(SQLErrorCodeSQLExceptionTranslator.java:258)
+	at org.springframework.jdbc.support.AbstractFallbackSQLExceptionTranslator.translate(AbstractFallbackSQLExceptionTranslator.java:107)
+	at org.mybatis.spring.MyBatisExceptionTranslator.translateExceptionIfPossible(MyBatisExceptionTranslator.java:92)
+	at org.mybatis.spring.SqlSessionTemplate$SqlSessionInterceptor.invoke(SqlSessionTemplate.java:439)
+	at jdk.proxy2/jdk.proxy2.$Proxy120.insert(Unknown Source)
+	at org.mybatis.spring.SqlSessionTemplate.insert(SqlSessionTemplate.java:272)
+	at org.apache.ibatis.binding.MapperMethod.execute(MapperMethod.java:62)
+	at org.apache.ibatis.binding.MapperProxy$PlainMethodInvoker.invoke(MapperProxy.java:141)
+	at org.apache.ibatis.binding.MapperProxy.invoke(MapperProxy.java:86)
+	at jdk.proxy2/jdk.proxy2.$Proxy135.insert(Unknown Source)
+	at com.library.agent.observability.ConversationTraceService.save(ConversationTraceService.java:35)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:354)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:196)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:163)
+	at org.springframework.aop.framework.CglibAopProxy$CglibMethodInvocation.proceed(CglibAopProxy.java:768)
+	at org.springframework.transaction.interceptor.TransactionInterceptor$1.proceedWithInvocation(TransactionInterceptor.java:123)
+	at org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:392)
+	at org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:119)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184)
+	at org.springframework.aop.framework.CglibAopProxy$CglibMethodInvocation.proceed(CglibAopProxy.java:768)
+	at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:720)
+	at com.library.agent.observability.ConversationTraceService$$SpringCGLIB$$0.save(<generated>)
+	at com.library.agent.healthcheck.HealthCheckRunner.runLlmReAct(HealthCheckRunner.java:177)
+	at com.library.agent.healthcheck.HealthCheckRunner.runOnce(HealthCheckRunner.java:76)
+	at com.library.agent.healthcheck.HealthCheckRunner.scheduledRun(HealthCheckRunner.java:59)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.runInternal(ScheduledMethodRunnable.java:130)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.lambda$run$2(ScheduledMethodRunnable.java:124)
+	at io.micrometer.observation.Observation.observe(Observation.java:499)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.run(ScheduledMethodRunnable.java:124)
+	at org.springframework.scheduling.support.DelegatingErrorHandlingRunnable.run(DelegatingErrorHandlingRunnable.java:54)
+	at org.springframework.scheduling.concurrent.ReschedulingRunnable.run(ReschedulingRunnable.java:96)
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:539)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:264)
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:304)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1136)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:635)
+	at java.base/java.lang.Thread.run(Thread.java:842)
+Caused by: org.postgresql.util.PSQLException: ERROR: null value in column "user_id" of relation "agent_conversation_trace" violates not-null constraint
+  详细：Failing row contains (394, trace_cc547c32b2834f289f87cd70b1405363, null, hc_1788362520002, scheduled-healthcheck-hc_1788362520002, null, 2026-09-02 23:22:00.002307, 2026-09-02 23:22:11.968862, 11966, 2948, 422, 3370, 3, 2, SUCCESS, null, 2026-09-02 23:22:11.968862).
+	at org.postgresql.core.v3.QueryExecutorImpl.receiveErrorResponse(QueryExecutorImpl.java:2713)
+	at org.postgresql.core.v3.QueryExecutorImpl.processResults(QueryExecutorImpl.java:2401)
+	at org.postgresql.core.v3.QueryExecutorImpl.execute(QueryExecutorImpl.java:368)
+	at org.postgresql.jdbc.PgStatement.executeInternal(PgStatement.java:498)
+	at org.postgresql.jdbc.PgStatement.execute(PgStatement.java:415)
+	at org.postgresql.jdbc.PgPreparedStatement.executeWithFlags(PgPreparedStatement.java:190)
+	at org.postgresql.jdbc.PgPreparedStatement.execute(PgPreparedStatement.java:177)
+	at com.zaxxer.hikari.pool.ProxyPreparedStatement.execute(ProxyPreparedStatement.java:44)
+	at com.zaxxer.hikari.pool.HikariProxyPreparedStatement.execute(HikariProxyPreparedStatement.java)
+	at org.apache.ibatis.executor.statement.PreparedStatementHandler.update(PreparedStatementHandler.java:48)
+	at org.apache.ibatis.executor.statement.RoutingStatementHandler.update(RoutingStatementHandler.java:75)
+	at org.apache.ibatis.executor.SimpleExecutor.doUpdate(SimpleExecutor.java:50)
+	at org.apache.ibatis.executor.BaseExecutor.update(BaseExecutor.java:117)
+	at org.apache.ibatis.executor.CachingExecutor.update(CachingExecutor.java:76)
+	at org.apache.ibatis.session.defaults.DefaultSqlSession.update(DefaultSqlSession.java:197)
+	at org.apache.ibatis.session.defaults.DefaultSqlSession.insert(DefaultSqlSession.java:184)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at org.mybatis.spring.SqlSessionTemplate$SqlSessionInterceptor.invoke(SqlSessionTemplate.java:425)
+	... 41 common frames omitted
+2026-09-02 23:22:11.999 [scheduling-1] INFO  c.l.a.healthcheck.HealthCheckRunner [traceId=840f51fc500ed656cb30c9da7612ada1,spanId=4fba410cfefac003] - 巡检完成 runId=hc_1788362520002 instance=rag库 status=ANOMALY anomalies=2 emailSent=true
+2026-09-02 23:22:12.128 [SpringApplicationShutdownHook] INFO  o.a.r.s.s.DefaultRocketMQListenerContainer [traceId=,spanId=] - container destroyed, DefaultRocketMQListenerContainer{consumerGroup='agent-rag-consumer-group', namespace='', namespaceV2='', nameServer='127.0.0.1:9876', topic='rag-ingest-topic', consumeMode=CONCURRENTLY, selectorType=TAG, selectorExpression='*', messageModel=CLUSTERING', tlsEnable=false, instanceName=DEFAULT}
+2026-09-02 23:22:14.893 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource [traceId=,spanId=] - HikariPool-1 - Shutdown initiated...
+2026-09-02 23:22:14.895 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource [traceId=,spanId=] - HikariPool-1 - Shutdown completed.
+2026-09-02 23:22:17.023 [background-preinit] INFO  o.h.validator.internal.util.Version [traceId=,spanId=] - HV000001: Hibernate Validator 8.0.1.Final
+2026-09-02 23:22:17.048 [main] INFO  com.library.agent.AgentApplication [traceId=,spanId=] - Starting AgentApplication using Java 17.0.12 with PID 4036 (D:\MyProject\Agent\target\classes started by 郑钦 in D:\MyProject\Agent)
+2026-09-02 23:22:17.049 [main] INFO  com.library.agent.AgentApplication [traceId=,spanId=] - No active profile set, falling back to 1 default profile: "default"
+2026-09-02 23:22:17.798 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate [traceId=,spanId=] - Multiple Spring Data modules found, entering strict repository configuration mode
+2026-09-02 23:22:17.799 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate [traceId=,spanId=] - Bootstrapping Spring Data Elasticsearch repositories in DEFAULT mode.
+2026-09-02 23:22:17.909 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate [traceId=,spanId=] - Finished Spring Data repository scanning in 105 ms. Found 1 Elasticsearch repository interface.
+2026-09-02 23:22:17.912 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate [traceId=,spanId=] - Multiple Spring Data modules found, entering strict repository configuration mode
+2026-09-02 23:22:17.913 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate [traceId=,spanId=] - Bootstrapping Spring Data Reactive Elasticsearch repositories in DEFAULT mode.
+2026-09-02 23:22:17.920 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate [traceId=,spanId=] - Finished Spring Data repository scanning in 6 ms. Found 0 Reactive Elasticsearch repository interfaces.
+2026-09-02 23:22:17.926 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate [traceId=,spanId=] - Multiple Spring Data modules found, entering strict repository configuration mode
+2026-09-02 23:22:17.926 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate [traceId=,spanId=] - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2026-09-02 23:22:17.936 [main] INFO  o.s.d.r.c.RepositoryConfigurationExtensionSupport [traceId=,spanId=] - Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.library.agent.es.repository.RagChunkSearchRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-09-02 23:22:17.936 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate [traceId=,spanId=] - Finished Spring Data repository scanning in 5 ms. Found 0 Redis repository interfaces.
+2026-09-02 23:22:18.689 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer [traceId=,spanId=] - Tomcat initialized with port 8084 (http)
+2026-09-02 23:22:18.704 [main] INFO  o.a.coyote.http11.Http11NioProtocol [traceId=,spanId=] - Initializing ProtocolHandler ["http-nio-8084"]
+2026-09-02 23:22:18.705 [main] INFO  o.a.catalina.core.StandardService [traceId=,spanId=] - Starting service [Tomcat]
+2026-09-02 23:22:18.706 [main] INFO  o.a.catalina.core.StandardEngine [traceId=,spanId=] - Starting Servlet engine: [Apache Tomcat/10.1.20]
+2026-09-02 23:22:18.774 [main] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] [traceId=,spanId=] - Initializing Spring embedded WebApplicationContext
+2026-09-02 23:22:18.775 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext [traceId=,spanId=] - Root WebApplicationContext: initialization completed in 1694 ms
+2026-09-02 23:22:20.816 [main] INFO  o.a.r.s.a.RocketMQAutoConfiguration [traceId=,spanId=] - a producer (agent-producer-group) init on namesrv 127.0.0.1:9876
+2026-09-02 23:22:22.397 [main] INFO  o.a.r.s.s.RocketMQMessageListenerContainerRegistrar [traceId=,spanId=] - Register the listener to container, listenerBeanName:ragIngestConsumer, containerBeanName:org.apache.rocketmq.spring.support.DefaultRocketMQListenerContainer_1
+2026-09-02 23:22:22.499 [main] INFO  o.s.b.a.w.s.WelcomePageHandlerMapping [traceId=,spanId=] - Adding welcome page: class path resource [static/index.html]
+2026-09-02 23:22:22.768 [main] INFO  o.s.b.a.e.web.EndpointLinksResolver [traceId=,spanId=] - Exposing 2 endpoint(s) beneath base path '/actuator'
+2026-09-02 23:22:23.017 [main] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=,spanId=] - Registered ReAct tool, name=checkDatabaseHealth, method=DatabaseHealthCheckTool.checkDatabaseHealth
+2026-09-02 23:22:23.017 [main] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=,spanId=] - Registered ReAct tool, name=collectDatabaseMetrics, method=DatabaseMetricsTool.collectDatabaseMetrics
+2026-09-02 23:22:23.017 [main] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=,spanId=] - Registered ReAct tool, name=sendAlertEmail, method=EmailAlertTool.sendAlertEmail
+2026-09-02 23:22:23.017 [main] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=,spanId=] - Registered ReAct tool, name=resetSlowQueryStats, method=SlowQueryTool.resetSlowQueryStats
+2026-09-02 23:22:23.017 [main] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=,spanId=] - Registered ReAct tool, name=getTopSlowQueries, method=SlowQueryTool.getTopSlowQueries
+2026-09-02 23:22:23.017 [main] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=,spanId=] - Registered ReAct tool, name=getSqlExecutionPlan, method=SqlExecutionPlanTool.getSqlExecutionPlan
+2026-09-02 23:22:23.017 [main] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=,spanId=] - Registered ReAct tool, name=getWeather, method=WeatherTool.getWeather
+2026-09-02 23:22:23.060 [main] INFO  o.a.coyote.http11.Http11NioProtocol [traceId=,spanId=] - Starting ProtocolHandler ["http-nio-8084"]
+2026-09-02 23:22:23.067 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer [traceId=,spanId=] - Tomcat started on port 8084 (http) with context path ''
+2026-09-02 23:22:24.618 [main] INFO  o.a.r.s.s.DefaultRocketMQListenerContainer [traceId=,spanId=] - running container: DefaultRocketMQListenerContainer{consumerGroup='agent-rag-consumer-group', namespace='', namespaceV2='', nameServer='127.0.0.1:9876', topic='rag-ingest-topic', consumeMode=CONCURRENTLY, selectorType=TAG, selectorExpression='*', messageModel=CLUSTERING', tlsEnable=false, instanceName=DEFAULT}
+2026-09-02 23:22:24.630 [main] INFO  com.library.agent.AgentApplication [traceId=,spanId=] - Started AgentApplication in 7.974 seconds (process running for 8.584)
+2026-09-02 23:22:25.045 [RMI TCP Connection(1)-192.168.31.81] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] [traceId=,spanId=] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-09-02 23:22:25.045 [RMI TCP Connection(1)-192.168.31.81] INFO  o.s.web.servlet.DispatcherServlet [traceId=,spanId=] - Initializing Servlet 'dispatcherServlet'
+2026-09-02 23:22:25.046 [RMI TCP Connection(1)-192.168.31.81] INFO  o.s.web.servlet.DispatcherServlet [traceId=,spanId=] - Completed initialization in 1 ms
+2026-09-02 23:22:25.049 [RMI TCP Connection(2)-192.168.31.81] INFO  com.zaxxer.hikari.HikariDataSource [traceId=,spanId=] - HikariPool-1 - Starting...
+2026-09-02 23:22:25.143 [RMI TCP Connection(2)-192.168.31.81] INFO  com.zaxxer.hikari.pool.HikariPool [traceId=,spanId=] - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@49a4f22d
+2026-09-02 23:22:25.146 [RMI TCP Connection(2)-192.168.31.81] INFO  com.zaxxer.hikari.HikariDataSource [traceId=,spanId=] - HikariPool-1 - Start completed.
+2026-09-02 23:23:53.342 [ForkJoinPool.commonPool-worker-1] INFO  c.l.a.s.ReactiveStreamingService [traceId=7df5901bbba8d7b06cb7be4334df0fe0,spanId=d3f54cce77cfb5be] - Reactive LLM intent result: SIMPLE_CHAT
+2026-09-02 23:23:55.750 [ForkJoinPool.commonPool-worker-1] INFO  c.l.a.o.ConversationTraceService [traceId=7df5901bbba8d7b06cb7be4334df0fe0,spanId=d3f54cce77cfb5be] - Saved conversation trace: traceId=trace_9637fa0884924bde92e5dfc05fd93bcb, llmCalls=2, toolCalls=0, totalTokens=879
+2026-09-02 23:24:40.638 [ForkJoinPool.commonPool-worker-1] INFO  c.l.a.s.ReactiveStreamingService [traceId=c40c6fe5abe842f54077230bf09d6710,spanId=5df921f92519c956] - Reactive LLM intent result: KNOWLEDGE_BASE
+2026-09-02 23:24:45.796 [ForkJoinPool.commonPool-worker-1] INFO  c.l.a.l.impl.QueryRewriteServiceImpl [traceId=c40c6fe5abe842f54077230bf09d6710,spanId=5df921f92519c956] - Query rewrite result, rewritten=true, original=你好，我叫小牛，还记得我是负责什么的运维吗, rewrittenQuery=小牛负责什么运维工作
+2026-09-02 23:24:48.886 [ForkJoinPool.commonPool-worker-1] INFO  c.l.a.o.ConversationTraceService [traceId=c40c6fe5abe842f54077230bf09d6710,spanId=5df921f92519c956] - Saved conversation trace: traceId=trace_034b7aea0a344e8187b47900b170882e, llmCalls=2, toolCalls=0, totalTokens=995
+2026-09-02 23:25:57.183 [ForkJoinPool.commonPool-worker-2] INFO  c.l.a.s.ReactiveStreamingService [traceId=11b19becbc3ce4276d8d3c4b6ade6a88,spanId=d6bd8ebd6ad14c27] - Reactive LLM intent result: COMPLEX_TASK
+2026-09-02 23:26:00.952 [ForkJoinPool.commonPool-worker-2] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=11b19becbc3ce4276d8d3c4b6ade6a88,spanId=d6bd8ebd6ad14c27] - ReAct step=1 input length=6859
+2026-09-02 23:26:04.658 [ForkJoinPool.commonPool-worker-2] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=11b19becbc3ce4276d8d3c4b6ade6a88,spanId=d6bd8ebd6ad14c27] - ReAct step=1 model output length=421
+2026-09-02 23:26:04.658 [tool-exec-] INFO  com.zaxxer.hikari.HikariDataSource [traceId=,spanId=] - HikariPool-2 - Starting...
+2026-09-02 23:26:04.684 [tool-exec-] INFO  com.zaxxer.hikari.HikariDataSource [traceId=,spanId=] - HikariPool-2 - Start completed.
+2026-09-02 23:26:04.719 [ForkJoinPool.commonPool-worker-2] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=11b19becbc3ce4276d8d3c4b6ade6a88,spanId=d6bd8ebd6ad14c27] - ReAct step=2 input length=9423
+2026-09-02 23:26:19.309 [ForkJoinPool.commonPool-worker-2] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=11b19becbc3ce4276d8d3c4b6ade6a88,spanId=d6bd8ebd6ad14c27] - ReAct step=2 model output length=1197
+2026-09-02 23:26:23.464 [ForkJoinPool.commonPool-worker-2] INFO  c.l.a.o.ConversationTraceService [traceId=11b19becbc3ce4276d8d3c4b6ade6a88,spanId=d6bd8ebd6ad14c27] - Saved conversation trace: traceId=trace_a88177aa6b4541baa0bd75c5709515bd, llmCalls=4, toolCalls=1, totalTokens=9828
+2026-09-02 23:30:00.003 [scheduling-1] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=6682d5c11c91bbe4d4c3af0275a87388,spanId=924dbcf0c07c2e2b] - ReAct step=1 input length=1543
+2026-09-02 23:30:01.662 [scheduling-1] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=6682d5c11c91bbe4d4c3af0275a87388,spanId=924dbcf0c07c2e2b] - ReAct step=1 model output length=219
+2026-09-02 23:30:01.692 [scheduling-1] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=6682d5c11c91bbe4d4c3af0275a87388,spanId=924dbcf0c07c2e2b] - ReAct step=2 input length=2092
+2026-09-02 23:30:08.100 [scheduling-1] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=6682d5c11c91bbe4d4c3af0275a87388,spanId=924dbcf0c07c2e2b] - ReAct step=2 model output length=639
+2026-09-02 23:30:09.289 [tool-exec-] INFO  com.library.agent.mail.MailService [traceId=,spanId=] - 告警邮件发送成功 subject=[DB告警] rag库 2项指标异常, recipients=[2892294059@qq.com]
+2026-09-02 23:30:09.291 [scheduling-1] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=6682d5c11c91bbe4d4c3af0275a87388,spanId=924dbcf0c07c2e2b] - ReAct step=3 input length=2844
+2026-09-02 23:30:11.819 [scheduling-1] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=6682d5c11c91bbe4d4c3af0275a87388,spanId=924dbcf0c07c2e2b] - ReAct step=3 model output length=199
+2026-09-02 23:30:11.907 [scheduling-1] WARN  c.l.a.healthcheck.HealthCheckRunner [traceId=6682d5c11c91bbe4d4c3af0275a87388,spanId=924dbcf0c07c2e2b] - 巡检 trace 持久化失败 runId=hc_1788363000003
+org.springframework.dao.DataIntegrityViolationException: 
+### Error updating database.  Cause: org.postgresql.util.PSQLException: ERROR: null value in column "user_id" of relation "agent_conversation_trace" violates not-null constraint
+  详细：Failing row contains (398, trace_991f9668daed457aa022766abd5b7fee, null, hc_1788363000003, scheduled-healthcheck-hc_1788363000003, null, 2026-09-02 23:30:00.00382, 2026-09-02 23:30:11.821997, 11818, 2943, 419, 3362, 3, 2, SUCCESS, null, 2026-09-02 23:30:11.821997).
+### The error may exist in file [D:\MyProject\Agent\target\classes\mapper\ConversationTraceMapper.xml]
+### The error may involve com.library.agent.mapper.ConversationTraceMapper.insert-Inline
+### The error occurred while setting parameters
+### SQL: INSERT INTO agent_conversation_trace         (             trace_id,             user_id,             conversation_id,             user_query,             intent_type,             start_time,             end_time,             total_duration_ms,             total_input_tokens,             total_output_tokens,             total_tokens,             llm_call_count,             tool_call_count,             status,             error_message,             created_at         )         VALUES         (             ?,             ?,             ?,             ?,             ?,             ?,             ?,             ?,             COALESCE(?, 0),             COALESCE(?, 0),             COALESCE(?, 0),             COALESCE(?, 0),             COALESCE(?, 0),             COALESCE(?, 'SUCCESS'),             ?,             COALESCE(?, CURRENT_TIMESTAMP)         )
+### Cause: org.postgresql.util.PSQLException: ERROR: null value in column "user_id" of relation "agent_conversation_trace" violates not-null constraint
+  详细：Failing row contains (398, trace_991f9668daed457aa022766abd5b7fee, null, hc_1788363000003, scheduled-healthcheck-hc_1788363000003, null, 2026-09-02 23:30:00.00382, 2026-09-02 23:30:11.821997, 11818, 2943, 419, 3362, 3, 2, SUCCESS, null, 2026-09-02 23:30:11.821997).
+; ERROR: null value in column "user_id" of relation "agent_conversation_trace" violates not-null constraint
+  详细：Failing row contains (398, trace_991f9668daed457aa022766abd5b7fee, null, hc_1788363000003, scheduled-healthcheck-hc_1788363000003, null, 2026-09-02 23:30:00.00382, 2026-09-02 23:30:11.821997, 11818, 2943, 419, 3362, 3, 2, SUCCESS, null, 2026-09-02 23:30:11.821997).
+	at org.springframework.jdbc.support.SQLErrorCodeSQLExceptionTranslator.doTranslate(SQLErrorCodeSQLExceptionTranslator.java:258)
+	at org.springframework.jdbc.support.AbstractFallbackSQLExceptionTranslator.translate(AbstractFallbackSQLExceptionTranslator.java:107)
+	at org.mybatis.spring.MyBatisExceptionTranslator.translateExceptionIfPossible(MyBatisExceptionTranslator.java:92)
+	at org.mybatis.spring.SqlSessionTemplate$SqlSessionInterceptor.invoke(SqlSessionTemplate.java:439)
+	at jdk.proxy2/jdk.proxy2.$Proxy120.insert(Unknown Source)
+	at org.mybatis.spring.SqlSessionTemplate.insert(SqlSessionTemplate.java:272)
+	at org.apache.ibatis.binding.MapperMethod.execute(MapperMethod.java:62)
+	at org.apache.ibatis.binding.MapperProxy$PlainMethodInvoker.invoke(MapperProxy.java:141)
+	at org.apache.ibatis.binding.MapperProxy.invoke(MapperProxy.java:86)
+	at jdk.proxy2/jdk.proxy2.$Proxy135.insert(Unknown Source)
+	at com.library.agent.observability.ConversationTraceService.save(ConversationTraceService.java:35)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:354)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:196)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:163)
+	at org.springframework.aop.framework.CglibAopProxy$CglibMethodInvocation.proceed(CglibAopProxy.java:768)
+	at org.springframework.transaction.interceptor.TransactionInterceptor$1.proceedWithInvocation(TransactionInterceptor.java:123)
+	at org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:392)
+	at org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:119)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184)
+	at org.springframework.aop.framework.CglibAopProxy$CglibMethodInvocation.proceed(CglibAopProxy.java:768)
+	at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:720)
+	at com.library.agent.observability.ConversationTraceService$$SpringCGLIB$$0.save(<generated>)
+	at com.library.agent.healthcheck.HealthCheckRunner.runLlmReAct(HealthCheckRunner.java:177)
+	at com.library.agent.healthcheck.HealthCheckRunner.runOnce(HealthCheckRunner.java:76)
+	at com.library.agent.healthcheck.HealthCheckRunner.scheduledRun(HealthCheckRunner.java:59)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.runInternal(ScheduledMethodRunnable.java:130)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.lambda$run$2(ScheduledMethodRunnable.java:124)
+	at io.micrometer.observation.Observation.observe(Observation.java:499)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.run(ScheduledMethodRunnable.java:124)
+	at org.springframework.scheduling.support.DelegatingErrorHandlingRunnable.run(DelegatingErrorHandlingRunnable.java:54)
+	at org.springframework.scheduling.concurrent.ReschedulingRunnable.run(ReschedulingRunnable.java:96)
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:539)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:264)
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:304)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1136)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:635)
+	at java.base/java.lang.Thread.run(Thread.java:842)
+Caused by: org.postgresql.util.PSQLException: ERROR: null value in column "user_id" of relation "agent_conversation_trace" violates not-null constraint
+  详细：Failing row contains (398, trace_991f9668daed457aa022766abd5b7fee, null, hc_1788363000003, scheduled-healthcheck-hc_1788363000003, null, 2026-09-02 23:30:00.00382, 2026-09-02 23:30:11.821997, 11818, 2943, 419, 3362, 3, 2, SUCCESS, null, 2026-09-02 23:30:11.821997).
+	at org.postgresql.core.v3.QueryExecutorImpl.receiveErrorResponse(QueryExecutorImpl.java:2713)
+	at org.postgresql.core.v3.QueryExecutorImpl.processResults(QueryExecutorImpl.java:2401)
+	at org.postgresql.core.v3.QueryExecutorImpl.execute(QueryExecutorImpl.java:368)
+	at org.postgresql.jdbc.PgStatement.executeInternal(PgStatement.java:498)
+	at org.postgresql.jdbc.PgStatement.execute(PgStatement.java:415)
+	at org.postgresql.jdbc.PgPreparedStatement.executeWithFlags(PgPreparedStatement.java:190)
+	at org.postgresql.jdbc.PgPreparedStatement.execute(PgPreparedStatement.java:177)
+	at com.zaxxer.hikari.pool.ProxyPreparedStatement.execute(ProxyPreparedStatement.java:44)
+	at com.zaxxer.hikari.pool.HikariProxyPreparedStatement.execute(HikariProxyPreparedStatement.java)
+	at org.apache.ibatis.executor.statement.PreparedStatementHandler.update(PreparedStatementHandler.java:48)
+	at org.apache.ibatis.executor.statement.RoutingStatementHandler.update(RoutingStatementHandler.java:75)
+	at org.apache.ibatis.executor.SimpleExecutor.doUpdate(SimpleExecutor.java:50)
+	at org.apache.ibatis.executor.BaseExecutor.update(BaseExecutor.java:117)
+	at org.apache.ibatis.executor.CachingExecutor.update(CachingExecutor.java:76)
+	at org.apache.ibatis.session.defaults.DefaultSqlSession.update(DefaultSqlSession.java:197)
+	at org.apache.ibatis.session.defaults.DefaultSqlSession.insert(DefaultSqlSession.java:184)
+	at jdk.internal.reflect.GeneratedMethodAccessor107.invoke(Unknown Source)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at org.mybatis.spring.SqlSessionTemplate$SqlSessionInterceptor.invoke(SqlSessionTemplate.java:425)
+	... 41 common frames omitted
+2026-09-02 23:30:11.938 [scheduling-1] INFO  c.l.a.healthcheck.HealthCheckRunner [traceId=6682d5c11c91bbe4d4c3af0275a87388,spanId=924dbcf0c07c2e2b] - 巡检完成 runId=hc_1788363000003 instance=rag库 status=ANOMALY anomalies=2 emailSent=true
+2026-09-02 23:47:30.149 [ForkJoinPool.commonPool-worker-6] INFO  c.l.a.s.ReactiveStreamingService [traceId=f4ba80c2da2ab42b968077fd64e1a0b0,spanId=cb1f435f78d68b36] - Reactive LLM intent result: SIMPLE_CHAT
+2026-09-02 23:47:45.026 [ForkJoinPool.commonPool-worker-6] INFO  c.l.a.o.ConversationTraceService [traceId=f4ba80c2da2ab42b968077fd64e1a0b0,spanId=cb1f435f78d68b36] - Saved conversation trace: traceId=trace_e3ee6d7d662246d8b64bd6c154cabe91, llmCalls=2, toolCalls=0, totalTokens=1945
+2026-09-02 23:49:15.335 [ForkJoinPool.commonPool-worker-7] INFO  c.l.a.s.ReactiveStreamingService [traceId=29c82dd57719bceae714b82fa991fa32,spanId=1fffc55e871c880a] - Reactive LLM intent result: COMPLEX_TASK
+2026-09-02 23:49:17.481 [ForkJoinPool.commonPool-worker-7] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=29c82dd57719bceae714b82fa991fa32,spanId=1fffc55e871c880a] - ReAct step=1 input length=6736
+2026-09-02 23:49:36.704 [ForkJoinPool.commonPool-worker-7] WARN  dev.langchain4j.internal.RetryUtils [traceId=29c82dd57719bceae714b82fa991fa32,spanId=1fffc55e871c880a] - A retriable exception occurred. Remaining retries: 2 of 2
+java.lang.RuntimeException: java.io.IOException: Connection reset
+	at dev.langchain4j.http.client.jdk.JdkHttpClient.execute(JdkHttpClient.java:64)
+	at dev.langchain4j.model.openai.internal.SyncRequestExecutor.execute(SyncRequestExecutor.java:20)
+	at dev.langchain4j.model.openai.internal.RequestExecutor.executeRaw(RequestExecutor.java:44)
+	at dev.langchain4j.model.openai.OpenAiChatModel.lambda$doChat$0(OpenAiChatModel.java:159)
+	at dev.langchain4j.internal.ExceptionMapper.withExceptionMapper(ExceptionMapper.java:29)
+	at dev.langchain4j.internal.RetryUtils.lambda$withRetryMappingExceptions$1(RetryUtils.java:326)
+	at dev.langchain4j.internal.RetryUtils$RetryPolicy.withRetry(RetryUtils.java:204)
+	at dev.langchain4j.internal.RetryUtils.withRetry(RetryUtils.java:263)
+	at dev.langchain4j.internal.RetryUtils.withRetryMappingExceptions(RetryUtils.java:326)
+	at dev.langchain4j.internal.RetryUtils.withRetryMappingExceptions(RetryUtils.java:309)
+	at dev.langchain4j.model.openai.OpenAiChatModel.doChat(OpenAiChatModel.java:158)
+	at dev.langchain4j.model.chat.ChatModel.chat(ChatModel.java:61)
+	at dev.langchain4j.model.chat.ChatModel.chat(ChatModel.java:36)
+	at com.library.agent.llm.impl.ToolCallingServiceImpl.chatWithTasks(ToolCallingServiceImpl.java:235)
+	at com.library.agent.service.ReactiveStreamingService.routeStream(ReactiveStreamingService.java:201)
+	at com.library.agent.service.ReactiveStreamingService.doChatAndStream(ReactiveStreamingService.java:135)
+	at com.library.agent.service.ReactiveStreamingService.lambda$chatReactive$0(ReactiveStreamingService.java:76)
+	at java.base/java.util.concurrent.CompletableFuture$AsyncRun.run(CompletableFuture.java:1804)
+	at java.base/java.util.concurrent.CompletableFuture$AsyncRun.exec(CompletableFuture.java:1796)
+	at java.base/java.util.concurrent.ForkJoinTask.doExec(ForkJoinTask.java:373)
+	at java.base/java.util.concurrent.ForkJoinPool$WorkQueue.topLevelExec(ForkJoinPool.java:1182)
+	at java.base/java.util.concurrent.ForkJoinPool.scan(ForkJoinPool.java:1655)
+	at java.base/java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:1622)
+	at java.base/java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:165)
+Caused by: java.io.IOException: Connection reset
+	at java.net.http/jdk.internal.net.http.HttpClientImpl.send(HttpClientImpl.java:589)
+	at java.net.http/jdk.internal.net.http.HttpClientFacade.send(HttpClientFacade.java:123)
+	at dev.langchain4j.http.client.jdk.JdkHttpClient.execute(JdkHttpClient.java:51)
+	... 23 common frames omitted
+Caused by: java.net.SocketException: Connection reset
+	at java.base/sun.nio.ch.SocketChannelImpl.throwConnectionReset(SocketChannelImpl.java:394)
+	at java.base/sun.nio.ch.SocketChannelImpl.read(SocketChannelImpl.java:426)
+	at java.net.http/jdk.internal.net.http.SocketTube.readAvailable(SocketTube.java:1170)
+	at java.net.http/jdk.internal.net.http.SocketTube$InternalReadPublisher$InternalReadSubscription.read(SocketTube.java:833)
+	at java.net.http/jdk.internal.net.http.SocketTube$SocketFlowTask.run(SocketTube.java:181)
+	at java.net.http/jdk.internal.net.http.common.SequentialScheduler$SchedulableTask.run(SequentialScheduler.java:230)
+	at java.net.http/jdk.internal.net.http.common.SequentialScheduler.runOrSchedule(SequentialScheduler.java:303)
+	at java.net.http/jdk.internal.net.http.common.SequentialScheduler.runOrSchedule(SequentialScheduler.java:256)
+	at java.net.http/jdk.internal.net.http.SocketTube$InternalReadPublisher$InternalReadSubscription.signalReadable(SocketTube.java:774)
+	at java.net.http/jdk.internal.net.http.SocketTube$InternalReadPublisher$ReadEvent.signalEvent(SocketTube.java:957)
+	at java.net.http/jdk.internal.net.http.SocketTube$SocketFlowEvent.handle(SocketTube.java:253)
+	at java.net.http/jdk.internal.net.http.HttpClientImpl$SelectorManager.handleEvent(HttpClientImpl.java:982)
+	at java.net.http/jdk.internal.net.http.HttpClientImpl$SelectorManager.lambda$run$3(HttpClientImpl.java:937)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.net.http/jdk.internal.net.http.HttpClientImpl$SelectorManager.run(HttpClientImpl.java:937)
+2026-09-02 23:49:40.783 [ForkJoinPool.commonPool-worker-7] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=29c82dd57719bceae714b82fa991fa32,spanId=1fffc55e871c880a] - ReAct step=1 model output length=413
+2026-09-02 23:49:40.813 [ForkJoinPool.commonPool-worker-7] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=29c82dd57719bceae714b82fa991fa32,spanId=1fffc55e871c880a] - ReAct step=2 input length=9293
+2026-09-02 23:49:55.966 [ForkJoinPool.commonPool-worker-7] INFO  c.l.a.l.impl.ToolCallingServiceImpl [traceId=29c82dd57719bceae714b82fa991fa32,spanId=1fffc55e871c880a] - ReAct step=2 model output length=1189
+2026-09-02 23:50:00.308 [ForkJoinPool.commonPool-worker-7] INFO  c.l.a.o.ConversationTraceService [traceId=29c82dd57719bceae714b82fa991fa32,spanId=1fffc55e871c880a] - Saved conversation trace: traceId=trace_30ed7142164c4d39a1e032e4239ebdfb, llmCalls=4, toolCalls=1, totalTokens=9462
+2026-09-02 23:52:36.764 [ForkJoinPool.commonPool-worker-10] INFO  c.l.a.s.ReactiveStreamingService [traceId=b6649f10e274b1e19b078e3466d2c21a,spanId=a8cd71061a074180] - Reactive LLM intent result: SIMPLE_CHAT
+2026-09-02 23:52:39.357 [ForkJoinPool.commonPool-worker-10] INFO  c.l.a.o.ConversationTraceService [traceId=b6649f10e274b1e19b078e3466d2c21a,spanId=a8cd71061a074180] - Saved conversation trace: traceId=trace_9ebd81c172e2438e923cc0c5c440830f, llmCalls=2, toolCalls=0, totalTokens=1329
+2026-09-02 23:55:50.476 [ForkJoinPool.commonPool-worker-12] INFO  c.l.a.s.ReactiveStreamingService [traceId=e1266ff5c0ecbc123fe260b6b6f1d010,spanId=69dd5778c95baf60] - Reactive LLM intent result: SIMPLE_CHAT
+2026-09-02 23:55:51.928 [ForkJoinPool.commonPool-worker-12] INFO  c.l.a.o.ConversationTraceService [traceId=e1266ff5c0ecbc123fe260b6b6f1d010,spanId=69dd5778c95baf60] - Saved conversation trace: traceId=trace_0076ecbfd96e4ffeacda5dc8b021c646, llmCalls=2, toolCalls=0, totalTokens=903

@@ -11,6 +11,7 @@ import com.library.agent.llm.QueryRewriteResult;
 import com.library.agent.llm.QueryRewriteService;
 import com.library.agent.llm.ToolCallingService;
 import com.library.agent.memory.ConversationSummaryService;
+import com.library.agent.memory.LongTermMemoryService;
 import com.library.agent.memory.ShortTermMemoryService;
 import com.library.agent.observability.ConversationTraceCollector;
 import com.library.agent.observability.ConversationTraceService;
@@ -49,6 +50,7 @@ public class ReactiveStreamingService {
     private final ConversationSummaryService conversationSummaryService;
     private final ToolCallingService toolCallingService;
     private final QueryRewriteService queryRewriteService;
+    private final LongTermMemoryService longTermMemoryService;
     private final ConversationTraceService traceService;
     private final Tracer tracer;
 
@@ -122,10 +124,11 @@ public class ReactiveStreamingService {
                 "queryRewritten", rewriteResult.isRewritten()
         ));
 
-        /* 5. 构建上下文 */
+        /* 5. 构建上下文 + 回答前召回长期记忆（fail-open） */
         AgentChatContext context = buildChatContext(
                 userId, conversationId, query, rewriteResult.getRewrittenQuery(),
                 intentType, historyMessages, summary);
+        longTermMemoryService.recall(context);
 
         /* 6. 流式路由 */
         StringBuilder fullAnswer = new StringBuilder();
@@ -134,11 +137,12 @@ public class ReactiveStreamingService {
             sendEvent(emitter, "delta", Map.of("content", token));
         });
 
-        /* 7. 保存消息 */
+        /* 7. 保存消息 + 回答后触发长期记忆抽取（记住命令同步，常规异步，fail-open） */
         shortTermMemoryService.saveUserAndAssistantMessages(
                 userId, conversationId, query, fullAnswer.toString(),
                 Map.of("intentType", intentType.name()),
                 Map.of("intentType", intentType.name()));
+        longTermMemoryService.postTurn(userId, conversationId, query, fullAnswer.toString(), historyMessages, null);
 
         /* 8. 保存可观测数据 */
         traceService.save(collector, "SUCCESS", null);
@@ -168,6 +172,7 @@ public class ReactiveStreamingService {
                         context.getRewrittenQuery(),
                         context.getConversationSummary(),
                         context.getHistoryMessages(),
+                        context.getLongTermMemories(),
                         onDelta
                 );
                 recordLlmStreamCall(collector, "RAG_GENERATE", prompt);
@@ -201,7 +206,8 @@ public class ReactiveStreamingService {
                 String prompt = PromptBuilder.buildSimplePrompt(
                         context.getQuery(),
                         context.getConversationSummary(),
-                        context.getHistoryMessages());
+                        context.getHistoryMessages(),
+                        context.getLongTermMemories());
                 llmService.chatStream(prompt, onDelta);
                 recordLlmStreamCall(collector, "SIMPLE_CHAT", prompt);
             }

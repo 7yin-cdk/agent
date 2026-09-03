@@ -41,4 +41,11 @@ public class KeywordSearchService {
                 .map(hit -> Long.valueOf(hit.getContent().getChunkId()))
                 .toList();
     }
+
+    /**
+     * 删除某文件在 ES 中的全部关键词分片。
+     */
+    public void deleteByFileId(Long fileId) {
+        repository.deleteAll(repository.findByFileId(String.valueOf(fileId)));
+    }
 }

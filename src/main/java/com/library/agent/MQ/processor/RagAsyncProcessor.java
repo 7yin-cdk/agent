@@ -7,12 +7,14 @@ import com.library.agent.entity.TextChunk;
 import com.library.agent.entity.TextChunkVector;
 import com.library.agent.es.service.KeywordSearchService;
 import com.library.agent.llm.LlmService;
+import com.library.agent.mapper.FileMetadataMapper;
 import com.library.agent.mapper.TextChunkMapper;
 import com.library.agent.mapper.TextChunkVectorMapper;
 import com.library.agent.rag.service.DocumentParser;
 import io.minio.GetObjectArgs;
 import io.minio.MinioClient;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +26,7 @@ import java.util.List;
 /**
  * RAG流程异步任务执行器
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class RagAsyncProcessor {
@@ -34,11 +37,12 @@ public class RagAsyncProcessor {
             "，", ","
     };
 
-    private static final int MAX_CHUNK_SIZE = 800;
+    private static final int MAX_CHUNK_SIZE = 400;
     private static final int OVERLAP_SIZE = 100;
     private final TextChunkVectorMapper textChunkVectorMapper;
     private final KeywordSearchService keywordSearchService;
     private final TextChunkMapper textChunkMapper;
+    private final FileMetadataMapper fileMetadataMapper;
     private final MinioClient minioClient;
     private final DocumentParser documentParser;
     private final LlmService llmService;
@@ -63,10 +67,13 @@ public class RagAsyncProcessor {
             /* 3. 分片文本向量化 */
             List<List<Float>> embed = llmService.embed(chunks);
 
-            /* 4. 分片和分片向量化结果入库 */
+            /* 4. 分片和分片向量化结果入库，成功后回写文件状态 */
             saveChunks(fileId, chunks, embed);
+            fileMetadataMapper.updateStatus(fileId, "EMBEDDED");
         } catch (Exception e) {
-            System.out.println("异步任务执行失败");
+            /* 记录失败并回写 FAILED，供前端展示（不再抛出以避免无限重试） */
+            log.error("RAG 入库失败 fileId={}", fileId, e);
+            fileMetadataMapper.updateStatus(fileId, "FAILED");
         }
     }
 

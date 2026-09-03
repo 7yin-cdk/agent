@@ -17,6 +17,7 @@ import com.library.agent.llm.QueryRewriteResult;
 import com.library.agent.llm.QueryRewriteService;
 import com.library.agent.llm.ToolCallingService;
 import com.library.agent.memory.ConversationSummaryService;
+import com.library.agent.memory.LongTermMemoryService;
 import com.library.agent.memory.ShortTermMemoryService;
 import com.library.agent.rag.service.RagService;
 import com.library.agent.service.AgentService;
@@ -66,6 +67,7 @@ public class AgentServiceImpl implements AgentService {
     private final ConversationSummaryService conversationSummaryService;
     private final ToolCallingService toolCallingService;
     private final QueryRewriteService queryRewriteService;
+    private final LongTermMemoryService longTermMemoryService;
     private final Tracer tracer;
 
     /**
@@ -100,6 +102,8 @@ public class AgentServiceImpl implements AgentService {
                 historyMessages,
                 conversationSummary
         );
+        //回答前召回长期记忆（fail-open，写入 context.longTermMemories）
+        longTermMemoryService.recall(context);
         String answer = route(intentType, context);
         //保存本次聊天
         shortTermMemoryService.saveUserAndAssistantMessages(
@@ -111,6 +115,8 @@ public class AgentServiceImpl implements AgentService {
                 Map.of("intentType", intentType.name())
         );
         conversationService.touchConversation(userId, conversationId, 2);
+        //回答后触发长期记忆抽取（记住命令同步，常规异步，fail-open）
+        longTermMemoryService.postTurn(userId, conversationId, query, answer, historyMessages, null);
         // 判断是否需要生成摘要
         conversationSummaryService.triggerSummaryIfNeeded(userId, conversationId);
 
@@ -216,6 +222,8 @@ public class AgentServiceImpl implements AgentService {
                 historyMessages,
                 conversationSummary
         );
+        //回答前召回长期记忆（fail-open，写入 context.longTermMemories）
+        longTermMemoryService.recall(context);
 
         StringBuilder answer = new StringBuilder();
         routeStream(intentType, context, delta -> {
@@ -233,6 +241,8 @@ public class AgentServiceImpl implements AgentService {
                 Map.of("intentType", intentType.name())
         );
         conversationService.touchConversation(userId, conversationId, 2);
+        //回答后触发长期记忆抽取（记住命令同步，常规异步，fail-open）
+        longTermMemoryService.postTurn(userId, conversationId, query, finalAnswer, historyMessages, null);
         conversationSummaryService.triggerSummaryIfNeeded(userId, conversationId);
 
         sendEvent(emitter, "done", Map.of(
@@ -250,6 +260,7 @@ public class AgentServiceImpl implements AgentService {
                     context.getRewrittenQuery(),
                     context.getConversationSummary(),
                     context.getHistoryMessages(),
+                    context.getLongTermMemories(),
                     onDelta
             );
             case COMPLEX_TASK -> {
@@ -272,7 +283,8 @@ public class AgentServiceImpl implements AgentService {
                 String prompt = PromptBuilder.buildSimplePrompt(
                         context.getQuery(),
                         context.getConversationSummary(),
-                        context.getHistoryMessages()
+                        context.getHistoryMessages(),
+                        context.getLongTermMemories()
                 );
                 // TODO LLM调用超时采用下一个LLM
                 llmService.chatStream(prompt, onDelta);

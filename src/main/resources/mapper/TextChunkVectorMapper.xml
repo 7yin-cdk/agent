@@ -27,4 +27,15 @@
         LIMIT #{topK}
     </select>
 
+    <select id="selectTopKWithDistance" resultType="com.library.agent.rag.dto.ChunkSimilarity">
+        SELECT chunk_id, embedding <![CDATA[<=>]]> #{embedding, typeHandler=com.library.agent.handler.FloatArrayTypeHandler} AS distance
+        FROM text_chunk_vector
+        ORDER BY distance
+        LIMIT #{topK}
+    </select>
+
+    <delete id="deleteByFileId">
+        DELETE FROM text_chunk_vector WHERE file_id = #{fileId}
+    </delete>
+
 </mapper>

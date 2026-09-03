@@ -35,6 +35,51 @@
         </foreach>
     </insert>
 
+    <select id="selectByFileId" resultType="com.library.agent.rag.dto.ChunkView">
+        SELECT
+        c.chunk_id,
+        c.file_id,
+        f.file_name,
+        c.chunk_index,
+        c.chunk_text,
+        c.chunk_length,
+        c.created_at
+        FROM text_chunk c
+        JOIN file_metadata f ON f.id = c.file_id
+        WHERE c.file_id = #{fileId}
+        ORDER BY c.chunk_index
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countByFileId" resultType="long">
+        SELECT count(*) FROM text_chunk WHERE file_id = #{fileId}
+    </select>
+
+    <select id="selectByIdsWithFile" resultType="com.library.agent.rag.dto.ChunkView">
+        SELECT
+        c.chunk_id,
+        c.file_id,
+        f.file_name,
+        c.chunk_index,
+        c.chunk_text,
+        c.chunk_length,
+        c.created_at
+        FROM text_chunk c
+        LEFT JOIN file_metadata f ON f.id = c.file_id
+        JOIN (
+        VALUES
+        <foreach collection="chunkIds" item="id" index="idx" separator=",">
+            (#{id}, #{idx})
+        </foreach>
+        ) AS t(chunk_id, sort_order)
+        ON c.chunk_id = t.chunk_id
+        ORDER BY t.sort_order
+    </select>
+
+    <delete id="deleteByFileId">
+        DELETE FROM text_chunk WHERE file_id = #{fileId}
+    </delete>
+
     <select id="selectByChunkIds" resultType="com.library.agent.entity.TextChunk">
         SELECT
         c.chunk_id,

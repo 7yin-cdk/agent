@@ -1,0 +1,1 @@
+import{q as t}from"./index-CCWKO4ZY.js";const s=()=>t.get("/agent/observability/stats"),g=()=>t.get("/agent/observability/traces"),r=a=>t.get(`/agent/observability/traces/${a}`);export{r as a,s as b,g};

@@ -1,0 +1,347 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.library.agent.mapper.AgentLongTermMemoryMapper">
+
+    <resultMap id="AgentLongTermMemoryResultMap"
+               type="com.library.agent.entity.AgentLongTermMemory">
+        <id property="id" column="id"/>
+        <result property="userId" column="user_id"/>
+        <result property="category" column="category"/>
+        <result property="content" column="content"/>
+        <result property="keywords" column="keywords"
+                typeHandler="com.library.agent.handler.StringArrayTypeHandler"/>
+        <result property="entity" column="entity"/>
+        <result property="entityType" column="entity_type"/>
+        <result property="embedding" column="embedding"
+                typeHandler="com.library.agent.handler.FloatArrayTypeHandler"/>
+        <result property="importance" column="importance"/>
+        <result property="confidence" column="confidence"/>
+        <result property="dedupKey" column="dedup_key"/>
+        <result property="accessCount" column="access_count"/>
+        <result property="lastAccessedAt" column="last_accessed_at"
+                typeHandler="com.library.agent.handler.TimestamptzLocalDateTimeTypeHandler"/>
+        <result property="sourceConversationId" column="source_conversation_id"/>
+        <result property="sourceTurn" column="source_turn"/>
+        <result property="metadata" column="metadata"
+                typeHandler="com.library.agent.handler.JsonbTypeHandler"/>
+        <result property="deleted" column="is_deleted"/>
+        <result property="expiredAt" column="expired_at"
+                typeHandler="com.library.agent.handler.TimestamptzLocalDateTimeTypeHandler"/>
+        <result property="createdAt" column="created_at"
+                typeHandler="com.library.agent.handler.TimestamptzLocalDateTimeTypeHandler"/>
+        <result property="updatedAt" column="updated_at"
+                typeHandler="com.library.agent.handler.TimestamptzLocalDateTimeTypeHandler"/>
+        <result property="similarity" column="similarity"/>
+    </resultMap>
+
+    <!-- 不含 embedding 的常用列，列表/召回等不读大向量的查询复用 -->
+    <sql id="baseColumns">
+        id,
+        user_id,
+        category,
+        content,
+        keywords,
+        entity,
+        entity_type,
+        importance,
+        confidence,
+        dedup_key,
+        access_count,
+        last_accessed_at,
+        source_conversation_id,
+        source_turn,
+        metadata,
+        is_deleted,
+        expired_at,
+        created_at,
+        updated_at
+    </sql>
+
+    <insert id="insert"
+            parameterType="com.library.agent.entity.AgentLongTermMemory"
+            useGeneratedKeys="true"
+            keyProperty="id">
+        INSERT INTO agent_long_term_memory
+        (
+            user_id,
+            category,
+            content,
+            keywords,
+            entity,
+            entity_type,
+            embedding,
+            importance,
+            confidence,
+            dedup_key,
+            access_count,
+            last_accessed_at,
+            source_conversation_id,
+            source_turn,
+            metadata,
+            is_deleted,
+            expired_at,
+            created_at,
+            updated_at
+        )
+        VALUES
+            (
+                #{userId},
+                #{category},
+                #{content},
+                COALESCE(#{keywords, jdbcType=OTHER, typeHandler=com.library.agent.handler.StringArrayTypeHandler}, '{}'::text[]),
+                #{entity},
+                #{entityType},
+                #{embedding, jdbcType=OTHER, typeHandler=com.library.agent.handler.FloatArrayTypeHandler},
+                COALESCE(#{importance}, 5),
+                COALESCE(#{confidence}, 0.8),
+                #{dedupKey},
+                COALESCE(#{accessCount}, 0),
+                #{lastAccessedAt},
+                #{sourceConversationId},
+                #{sourceTurn},
+                COALESCE(#{metadata, jdbcType=OTHER, typeHandler=com.library.agent.handler.JsonbTypeHandler}, '{}'::jsonb),
+                COALESCE(#{deleted}, FALSE),
+                #{expiredAt},
+                COALESCE(#{createdAt}, CURRENT_TIMESTAMP),
+                COALESCE(#{updatedAt}, CURRENT_TIMESTAMP)
+            )
+    </insert>
+
+    <select id="selectById" resultMap="AgentLongTermMemoryResultMap">
+        SELECT
+            <include refid="baseColumns"/>,
+            embedding
+        FROM agent_long_term_memory
+        WHERE id = #{id}
+          AND user_id = #{userId}
+          AND is_deleted = FALSE
+    </select>
+
+    <select id="selectByDedupKey" resultMap="AgentLongTermMemoryResultMap">
+        SELECT
+            <include refid="baseColumns"/>,
+            embedding
+        FROM agent_long_term_memory
+        WHERE user_id = #{userId}
+          AND dedup_key = #{dedupKey}
+          AND is_deleted = FALSE
+        LIMIT 1
+    </select>
+
+
+    <select id="selectPage" resultMap="AgentLongTermMemoryResultMap">
+        SELECT
+            <include refid="baseColumns"/>
+        FROM agent_long_term_memory
+        WHERE user_id = #{userId}
+          AND is_deleted = FALSE
+        <if test="category != null and category != ''">
+            AND category = #{category}
+        </if>
+        <if test="entity != null and entity != ''">
+            AND entity = #{entity}
+        </if>
+        ORDER BY updated_at DESC, id DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countByUser" resultType="long">
+        SELECT COUNT(1)
+        FROM agent_long_term_memory
+        WHERE user_id = #{userId}
+          AND is_deleted = FALSE
+        <if test="category != null and category != ''">
+            AND category = #{category}
+        </if>
+        <if test="entity != null and entity != ''">
+            AND entity = #{entity}
+        </if>
+    </select>
+
+    <select id="selectAlwaysOn" resultMap="AgentLongTermMemoryResultMap">
+        SELECT
+            <include refid="baseColumns"/>
+        FROM agent_long_term_memory
+        WHERE user_id = #{userId}
+          AND is_deleted = FALSE
+          AND (expired_at IS NULL OR expired_at &gt; CURRENT_TIMESTAMP)
+          AND category IN ('USER_PROFILE', 'PREFERENCE', 'CONSTRAINT')
+        ORDER BY importance DESC, id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectByEntities" resultMap="AgentLongTermMemoryResultMap">
+        SELECT
+            <include refid="baseColumns"/>
+        FROM agent_long_term_memory
+        WHERE user_id = #{userId}
+          AND is_deleted = FALSE
+          AND (expired_at IS NULL OR expired_at &gt; CURRENT_TIMESTAMP)
+        <choose>
+            <when test="(entities != null and !entities.isEmpty()) or (keywords != null and !keywords.isEmpty())">
+                AND (
+                <if test="entities != null and !entities.isEmpty()">
+                    entity IN
+                    <foreach collection="entities" item="e" open="(" separator="," close=")">
+                        #{e}
+                    </foreach>
+                </if>
+                <if test="(entities != null and !entities.isEmpty()) and (keywords != null and !keywords.isEmpty())">
+                    OR
+                </if>
+                <if test="keywords != null and !keywords.isEmpty()">
+                    keywords &amp;&amp; ARRAY[
+                    <foreach collection="keywords" item="k" separator=",">
+                        CAST(#{k} AS TEXT)
+                    </foreach>
+                    ]
+                </if>
+                )
+            </when>
+            <otherwise>
+                AND 1 = 0
+            </otherwise>
+        </choose>
+        ORDER BY importance DESC, id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectTopKByEmbedding" resultMap="AgentLongTermMemoryResultMap">
+        SELECT
+            <include refid="baseColumns"/>,
+            embedding,
+            1 - (embedding <![CDATA[<=>]]> #{queryEmbedding, jdbcType=OTHER, typeHandler=com.library.agent.handler.FloatArrayTypeHandler}) AS similarity
+        FROM agent_long_term_memory
+        WHERE user_id = #{userId}
+          AND is_deleted = FALSE
+          AND embedding IS NOT NULL
+          AND (expired_at IS NULL OR expired_at &gt; CURRENT_TIMESTAMP)
+          AND category = 'EXPERIENCE'
+        ORDER BY embedding <![CDATA[<=>]]> #{queryEmbedding, jdbcType=OTHER, typeHandler=com.library.agent.handler.FloatArrayTypeHandler}, id
+        LIMIT #{topK}
+    </select>
+
+    <!-- 管理端 search：与向量召回同型，但不限 EXPERIENCE，便于全量语义检索调试 -->
+    <select id="selectSearchByEmbedding" resultMap="AgentLongTermMemoryResultMap">
+        SELECT
+            <include refid="baseColumns"/>,
+            embedding,
+            1 - (embedding <![CDATA[<=>]]> #{queryEmbedding, jdbcType=OTHER, typeHandler=com.library.agent.handler.FloatArrayTypeHandler}) AS similarity
+        FROM agent_long_term_memory
+        WHERE user_id = #{userId}
+          AND is_deleted = FALSE
+          AND embedding IS NOT NULL
+          AND (expired_at IS NULL OR expired_at &gt; CURRENT_TIMESTAMP)
+        ORDER BY embedding <![CDATA[<=>]]> #{queryEmbedding, jdbcType=OTHER, typeHandler=com.library.agent.handler.FloatArrayTypeHandler}, id
+        LIMIT #{topK}
+    </select>
+
+    <update id="updateAccessCount">
+        UPDATE agent_long_term_memory
+        SET access_count = access_count + 1,
+            last_accessed_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = #{userId}
+          AND id = #{id}
+          AND is_deleted = FALSE
+    </update>
+
+    <update id="updateContent"
+            parameterType="com.library.agent.entity.AgentLongTermMemory">
+        UPDATE agent_long_term_memory
+        SET category = #{category},
+            content = #{content},
+            keywords = COALESCE(#{keywords, jdbcType=OTHER, typeHandler=com.library.agent.handler.StringArrayTypeHandler}, '{}'::text[]),
+            entity = #{entity},
+            entity_type = #{entityType},
+            embedding = #{embedding, jdbcType=OTHER, typeHandler=com.library.agent.handler.FloatArrayTypeHandler},
+            importance = COALESCE(#{importance}, importance),
+            confidence = COALESCE(#{confidence}, confidence),
+            metadata = COALESCE(#{metadata, jdbcType=OTHER, typeHandler=com.library.agent.handler.JsonbTypeHandler}, metadata),
+            expired_at = #{expiredAt},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{id}
+          AND user_id = #{userId}
+          AND is_deleted = FALSE
+    </update>
+
+    <update id="updateImportance">
+        UPDATE agent_long_term_memory
+        SET importance = #{importance},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = #{userId}
+          AND id = #{id}
+          AND is_deleted = FALSE
+    </update>
+
+    <select id="countByCategory" resultType="long">
+        SELECT COUNT(1)
+        FROM agent_long_term_memory
+        WHERE user_id = #{userId}
+          AND category = #{category}
+          AND is_deleted = FALSE
+    </select>
+
+    <select id="selectEvictCandidates" resultMap="AgentLongTermMemoryResultMap">
+        SELECT
+            <include refid="baseColumns"/>
+        FROM agent_long_term_memory
+        WHERE user_id = #{userId}
+          AND category = #{category}
+          AND is_deleted = FALSE
+        ORDER BY importance ASC, last_accessed_at ASC NULLS FIRST, access_count ASC, id ASC
+        LIMIT #{limit}
+    </select>
+
+    <update id="logicalDeleteById">
+        UPDATE agent_long_term_memory
+        SET is_deleted = TRUE,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = #{userId}
+          AND id = #{id}
+          AND is_deleted = FALSE
+    </update>
+
+    <update id="logicalDeleteByCategory">
+        UPDATE agent_long_term_memory
+        SET is_deleted = TRUE,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = #{userId}
+          AND category = #{category}
+          AND is_deleted = FALSE
+    </update>
+
+    <update id="logicalDeleteByUser">
+        UPDATE agent_long_term_memory
+        SET is_deleted = TRUE,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = #{userId}
+          AND is_deleted = FALSE
+    </update>
+
+    <delete id="physicalDeleteByIds">
+        DELETE FROM agent_long_term_memory
+        WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <delete id="deleteExpired">
+        DELETE FROM agent_long_term_memory
+        WHERE is_deleted = TRUE
+           OR (expired_at IS NOT NULL AND expired_at &lt;= CURRENT_TIMESTAMP)
+    </delete>
+
+    <select id="selectUserCategories"
+            resultType="com.library.agent.mapper.AgentLongTermMemoryMapper$UserCategory">
+        SELECT user_id, category
+        FROM agent_long_term_memory
+        WHERE is_deleted = FALSE
+        GROUP BY user_id, category
+    </select>
+
+</mapper>

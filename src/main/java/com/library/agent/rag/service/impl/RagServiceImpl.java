@@ -2,6 +2,7 @@ package com.library.agent.rag.service.impl;
 
 import com.library.agent.MQ.Message.RagIngestMessage;
 import com.library.agent.MQ.producer.RagIngestProducer;
+import com.library.agent.entity.AgentLongTermMemory;
 import com.library.agent.entity.AgentShortTermMemory;
 import com.library.agent.entity.FileMetadata;
 import com.library.agent.entity.TextChunk;
@@ -12,13 +13,17 @@ import com.library.agent.mapper.FileMetadataMapper;
 import com.library.agent.mapper.TextChunkMapper;
 import com.library.agent.mapper.TextChunkVectorMapper;
 import com.library.agent.rag.service.RagService;
+import com.library.agent.rag.service.RrfMerger;
 import io.minio.BucketExistsArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import io.minio.RemoveObjectArgs;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
@@ -30,6 +35,7 @@ import java.util.function.Consumer;
  * <p>
  * 该服务负责文档上传、异步入库消息发送、向量检索以及 RAG Prompt 构建。
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class RagServiceImpl implements RagService {
@@ -53,6 +59,14 @@ public class RagServiceImpl implements RagService {
      */
     @Override
     public void ingest(MultipartFile file) {
+        uploadAndEnqueue(file);
+    }
+
+    /**
+     * 上传文档：MinIO 存原文 → 写 file_metadata(UPLOADED) → 发异步入库消息。
+     */
+    @Override
+    public FileMetadata uploadAndEnqueue(MultipartFile file) {
         try {
             String objectName = uploadToMinio(file);
             String fileUrl = bucketName + "/" + objectName;
@@ -77,6 +91,7 @@ public class RagServiceImpl implements RagService {
                     file.getOriginalFilename()
             );
             ragIngestProducer.send(message);
+            return metadata;
         } catch (Exception e) {
             throw new RuntimeException("RAG ingest 失败", e);
         }
@@ -125,7 +140,19 @@ public class RagServiceImpl implements RagService {
             List<AgentShortTermMemory> historyMessages,
             Consumer<String> onDelta
     ) {
-        String prompt = buildRagPrompt(text, rewrittenQuestion, conversationSummary, historyMessages);
+        return queryStream(text, rewrittenQuestion, conversationSummary, historyMessages, List.of(), onDelta);
+    }
+
+    @Override
+    public String queryStream(
+            String text,
+            String rewrittenQuestion,
+            String conversationSummary,
+            List<AgentShortTermMemory> historyMessages,
+            List<AgentLongTermMemory> longTermMemories,
+            Consumer<String> onDelta
+    ) {
+        String prompt = buildRagPrompt(text, rewrittenQuestion, conversationSummary, historyMessages, longTermMemories);
         // TODO LLM调用超时时采用下一个LLM
         llmService.chatStream(prompt, onDelta);
         return prompt;
@@ -135,7 +162,8 @@ public class RagServiceImpl implements RagService {
             String text,
             String rewrittenQuestion,
             String conversationSummary,
-            List<AgentShortTermMemory> historyMessages
+            List<AgentShortTermMemory> historyMessages,
+            List<AgentLongTermMemory> longTermMemories
     ) {
         String retrievalQuestion = normalizeRetrievalQuestion(text, rewrittenQuestion);
 
@@ -170,8 +198,9 @@ public class RagServiceImpl implements RagService {
             rerankChunks.add(chunks.get(rerankChunkId));
         }
 
-        /* 构建 RAG Prompt */
-        return PromptBuilder.buildRagPrompt(text, retrievalQuestion, conversationSummary, historyMessages, rerankChunks);
+        /* 构建 RAG Prompt（注入长期记忆段） */
+        return PromptBuilder.buildRagPrompt(text, retrievalQuestion, conversationSummary, historyMessages,
+                rerankChunks, longTermMemories);
     }
 
     private String normalizeRetrievalQuestion(String text, String rewrittenQuestion) {
@@ -211,32 +240,38 @@ public class RagServiceImpl implements RagService {
     }
 
     /**
-     * RFF倒排算法取混合检索后的TopK
-     * @param vectorIds 向量检索的文档id
-     * @param keywordIds 关键词检索的文档id
-     * @param limit 最终需要的TopK
-     * @return
+     * RRF 倒排融合，委托共享工具 {@link RrfMerger}。
      */
     private List<Long> mergeByRrf(List<Long> vectorIds, List<Long> keywordIds, int limit) {
-        Map<Long, Double> scores = new LinkedHashMap<>();
-        addRrfScores(scores, vectorIds);
-        addRrfScores(scores, keywordIds);
-
-        return scores.entrySet().stream()
-                .sorted(Map.Entry.<Long, Double>comparingByValue().reversed())
-                .limit(limit)
-                .map(Map.Entry::getKey)
-                .toList();
+        return RrfMerger.merge(vectorIds, keywordIds, limit);
     }
 
     /**
-     * 为文档赋RFF分
-     * @param scores
-     * @param ids
+     * 级联删除文档：Postgres 三表（事务内）+ ES/MinIO 尽力清理。
      */
-    private void addRrfScores(Map<Long, Double> scores, List<Long> ids) {
-        for (int i = 0; i < ids.size(); i++) {
-            scores.merge(ids.get(i), 1.0 / (60 + i + 1), Double::sum);
+    @Override
+    @Transactional
+    public void deleteDocument(Long fileId) {
+        FileMetadata metadata = fileMetadataMapper.selectById(fileId);
+        if (metadata == null) {
+            throw new IllegalArgumentException("文档不存在: " + fileId);
+        }
+        textChunkMapper.deleteByFileId(fileId);
+        textChunkVectorMapper.deleteByFileId(fileId);
+        fileMetadataMapper.deleteById(fileId);
+
+        try {
+            keywordSearchService.deleteByFileId(fileId);
+        } catch (Exception e) {
+            log.warn("删除 ES 分片失败 fileId={}", fileId, e);
+        }
+        try {
+            minioClient.removeObject(RemoveObjectArgs.builder()
+                    .bucket(metadata.getBucketName())
+                    .object(metadata.getObjectName())
+                    .build());
+        } catch (Exception e) {
+            log.warn("删除 MinIO 对象失败 fileId={}", fileId, e);
         }
     }
 }

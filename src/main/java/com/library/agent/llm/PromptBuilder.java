@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.library.agent.context.AgentChatContext;
+import com.library.agent.entity.AgentLongTermMemory;
 import com.library.agent.entity.AgentShortTermMemory;
 import org.springframework.core.io.ClassPathResource;
 
@@ -48,11 +49,30 @@ public final class PromptBuilder {
             String conversationSummary,
             List<AgentShortTermMemory> historyMessages
     ) {
+        return buildSimplePrompt(userQuestion, conversationSummary, historyMessages, List.of());
+    }
+
+    /**
+     * 构建普通聊天 Prompt（流式，注入长期记忆）。
+     *
+     * @param userQuestion       用户本轮问题
+     * @param conversationSummary 会话摘要
+     * @param historyMessages    当前会话历史消息
+     * @param longTermMemories   回答前召回的长期记忆；空列表整段省略
+     * @return 组装后的完整 Prompt
+     */
+    public static String buildSimplePrompt(
+            String userQuestion,
+            String conversationSummary,
+            List<AgentShortTermMemory> historyMessages,
+            List<AgentLongTermMemory> longTermMemories
+    ) {
         StringBuilder prompt = new StringBuilder();
 
         appendBaseRole(prompt);
         appendConversationSummary(prompt, conversationSummary);
         appendConversationHistory(prompt, historyMessages);
+        appendLongTermMemory(prompt, longTermMemories);
 
         prompt.append("### 任务定义\n");
         prompt.append("请根据用户的问题和当前会话历史，提供准确、清晰、有条理的回答。\n\n");
@@ -108,12 +128,29 @@ public final class PromptBuilder {
             List<AgentShortTermMemory> historyMessages,
             List<String> ragTexts
     ) {
+        return buildRagPrompt(userQuestion, rewrittenQuestion, conversationSummary,
+                historyMessages, ragTexts, List.of());
+    }
+
+    /**
+     * 构建带 RAG 资料的 Prompt（注入长期记忆）。
+     * 长期记忆段追加在参考资料之后。
+     */
+    public static String buildRagPrompt(
+            String userQuestion,
+            String rewrittenQuestion,
+            String conversationSummary,
+            List<AgentShortTermMemory> historyMessages,
+            List<String> ragTexts,
+            List<AgentLongTermMemory> longTermMemories
+    ) {
         StringBuilder prompt = new StringBuilder();
 
         appendBaseRole(prompt);
         appendConversationSummary(prompt, conversationSummary);
         appendConversationHistory(prompt, historyMessages);
         appendRagTexts(prompt, ragTexts);
+        appendLongTermMemory(prompt, longTermMemories);
 
         prompt.append("### 任务定义\n");
         prompt.append("请根据用户的问题、当前会话历史和参考资料，提供准确、清晰、有条理的回答。\n\n");
@@ -195,10 +232,11 @@ public final class PromptBuilder {
         appendSection(taskPrompt, "# Current Conversation State", currentConversationStatePrompt);
         appendSection(taskPrompt, "# Strict Output Rules (最高优先级)", outputRulesPrompt);
         String prompt = taskPrompt.toString();
-        // 替换用户提问，会话摘要和历史会话并返回
+        // 替换用户提问、会话摘要、历史会话与长期记忆后返回
         return prompt.replace("{{user_question}}", agentChatContext.getQuery())
                 .replace("{{conversation_summary}}", agentChatContext.getConversationSummary())
-                .replace("{{recent_history}}", buildHistory(agentChatContext.getHistoryMessages()));
+                .replace("{{recent_history}}", buildHistory(agentChatContext.getHistoryMessages()))
+                .replace("{{long_term_memory}}", buildLongTermMemoryText(agentChatContext.getLongTermMemories()));
     }
 
     /**
@@ -313,6 +351,56 @@ public final class PromptBuilder {
             prompt.append("【资料").append(i + 1).append("】\n");
             prompt.append(text.trim()).append("\n\n");
         }
+    }
+
+    /**
+     * 追加长期记忆段（非空才追加）。
+     * 格式对齐设计文档：### 长期记忆 + 【记忆N】[中文类别] 内容。
+     */
+    private static void appendLongTermMemory(StringBuilder prompt, List<AgentLongTermMemory> longTermMemories) {
+        String memoryText = buildLongTermMemoryText(longTermMemories);
+        if (!memoryText.isEmpty()) {
+            prompt.append(memoryText).append('\n');
+        }
+    }
+
+    /**
+     * 将召回的长期记忆渲染为 Prompt 文本块；无记忆时返回空串（整段省略）。
+     * 供简单聊天/RAG 直接拼接、复杂任务经 {{long_term_memory}} 占位替换共用。
+     */
+    public static String buildLongTermMemoryText(List<AgentLongTermMemory> longTermMemories) {
+        if (longTermMemories == null || longTermMemories.isEmpty()) {
+            return "";
+        }
+        StringBuilder text = new StringBuilder();
+        text.append("### 长期记忆\n");
+        int index = 1;
+        for (AgentLongTermMemory memory : longTermMemories) {
+            if (memory == null || memory.getContent() == null || memory.getContent().isBlank()) {
+                continue;
+            }
+            text.append("【记忆").append(index++).append("】[")
+                    .append(categoryLabel(memory.getCategory())).append("] ")
+                    .append(memory.getContent().trim()).append('\n');
+        }
+        return text.toString();
+    }
+
+    /**
+     * 记忆类别常量 → 中文展示名（与设计文档注入示例一致）。
+     */
+    private static String categoryLabel(String category) {
+        if (category == null) {
+            return "记忆";
+        }
+        return switch (category) {
+            case "USER_PROFILE" -> "用户画像";
+            case "PREFERENCE" -> "偏好";
+            case "CONSTRAINT" -> "约束";
+            case "ENTITY" -> "实体";
+            case "EXPERIENCE" -> "经验";
+            default -> category;
+        };
     }
 
     /**

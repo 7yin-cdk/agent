@@ -10,5 +10,7 @@ Decide the next ReAct step for the user request. Tools can only be invoked with 
 ### Recent conversation history
 {{recent_history}}
 
+{{long_term_memory}}
+
 ### ReAct history
 {{react_history}}

@@ -40,7 +40,7 @@ public interface LlmService {
     void chatStream(String prompt, Consumer<String> onDelta);
 
     /**
-     * 将多个文本转为向量（1024维）
+     * 将多个文本转为向量（1536维）
      * @param texts 输入文本集合
      * @return 向量结果
      */

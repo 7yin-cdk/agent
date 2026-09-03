@@ -1,9 +1,0 @@
-2026-07-23 03:25:08.934 [HikariPool-1 housekeeper] WARN  com.zaxxer.hikari.pool.HikariPool [traceId=,spanId=] - HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=3h1m57s95ms775µs900ns).
-2026-07-23 03:25:13.574 [HikariPool-2 housekeeper] WARN  com.zaxxer.hikari.pool.HikariPool [traceId=,spanId=] - HikariPool-2 - Thread starvation or clock leap detected (housekeeper delta=3h1m57s299ms818µs300ns).
-2026-07-23 16:05:22.751 [HikariPool-1 housekeeper] WARN  com.zaxxer.hikari.pool.HikariPool [traceId=,spanId=] - HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=12h40m19s394ms560µs300ns).
-2026-07-23 16:05:27.373 [HikariPool-2 housekeeper] WARN  com.zaxxer.hikari.pool.HikariPool [traceId=,spanId=] - HikariPool-2 - Thread starvation or clock leap detected (housekeeper delta=12h40m19s376ms88µs200ns).
-2026-07-23 16:08:49.663 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource [traceId=,spanId=] - HikariPool-2 - Shutdown initiated...
-2026-07-23 16:08:49.669 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource [traceId=,spanId=] - HikariPool-2 - Shutdown completed.
-2026-07-23 16:08:49.669 [SpringApplicationShutdownHook] INFO  o.a.r.s.s.DefaultRocketMQListenerContainer [traceId=,spanId=] - container destroyed, DefaultRocketMQListenerContainer{consumerGroup='agent-rag-consumer-group', namespace='', namespaceV2='', nameServer='127.0.0.1:9876', topic='rag-ingest-topic', consumeMode=CONCURRENTLY, selectorType=TAG, selectorExpression='*', messageModel=CLUSTERING', tlsEnable=false, instanceName=DEFAULT}
-2026-07-23 16:08:52.182 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource [traceId=,spanId=] - HikariPool-1 - Shutdown initiated...
-2026-07-23 16:08:52.184 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource [traceId=,spanId=] - HikariPool-1 - Shutdown completed.

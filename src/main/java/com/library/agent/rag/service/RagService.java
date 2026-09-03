@@ -1,6 +1,8 @@
 package com.library.agent.rag.service;
 
+import com.library.agent.entity.AgentLongTermMemory;
 import com.library.agent.entity.AgentShortTermMemory;
+import com.library.agent.entity.FileMetadata;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -19,6 +21,22 @@ public interface RagService {
      * @param file 原始文件
      */
     void ingest(MultipartFile file);
+
+    /**
+     * 上传文档、写 file_metadata(UPLOADED) 并发送异步入库消息，返回带 id 的元数据供轮询状态。
+     *
+     * @param file 原始文件
+     * @return 落库后的文件元数据（含主键）
+     */
+    FileMetadata uploadAndEnqueue(MultipartFile file);
+
+    /**
+     * 级联删除文档：Postgres 切片/向量/元数据（事务）+ ES/MinIO 尽力清理。
+     *
+     * @param fileId 文件主键
+     * @throws IllegalArgumentException 文档不存在
+     */
+    void deleteDocument(Long fileId);
 
     /**
      * 使用 RAG 资料和当前会话历史回答用户问题。
@@ -56,6 +74,18 @@ public interface RagService {
             String rewrittenQuestion,
             String conversationSummary,
             List<AgentShortTermMemory> historyMessages,
+            Consumer<String> onDelta
+    );
+
+    /**
+     * 流式 RAG 问答（带查询改写 + 长期记忆注入），返回构建的 prompt 供可观测采集。
+     */
+    String queryStream(
+            String question,
+            String rewrittenQuestion,
+            String conversationSummary,
+            List<AgentShortTermMemory> historyMessages,
+            List<AgentLongTermMemory> longTermMemories,
             Consumer<String> onDelta
     );
 }

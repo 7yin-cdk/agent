@@ -6,6 +6,7 @@ import com.library.agent.llm.LlmService;
 import com.library.agent.llm.QueryRewriteService;
 import com.library.agent.llm.ToolCallingService;
 import com.library.agent.memory.ConversationSummaryService;
+import com.library.agent.memory.LongTermMemoryService;
 import com.library.agent.memory.ShortTermMemoryService;
 import com.library.agent.rag.service.RagService;
 import io.micrometer.tracing.Tracer;
@@ -82,6 +83,7 @@ class AgentServiceImplIntentTest {
                 mock(ConversationSummaryService.class),
                 mock(ToolCallingService.class),
                 mock(QueryRewriteService.class),
+                mock(LongTermMemoryService.class),
                 mock(Tracer.class)
         );
     }

@@ -12,4 +12,56 @@
             (#{fileName}, #{fileUrl}, #{fileSize}, #{contentType}, #{bucketName}, #{objectName}, #{status}, now(), now())
     </insert>
 
+    <select id="selectById" resultType="com.library.agent.entity.FileMetadata">
+        SELECT id, file_name, file_url, file_size, content_type, bucket_name, object_name, status, created_at, updated_at
+        FROM file_metadata
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectPage" resultType="com.library.agent.rag.dto.FileListVO">
+        SELECT
+            f.id,
+            f.file_name,
+            f.file_size,
+            f.content_type,
+            f.status,
+            f.created_at,
+            f.updated_at,
+            (SELECT count(*) FROM text_chunk c WHERE c.file_id = f.id) AS chunk_count
+        FROM file_metadata f
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND f.file_name ILIKE '%' || #{keyword} || '%'
+            </if>
+            <if test="status != null and status != ''">
+                AND f.status = #{status}
+            </if>
+        </where>
+        ORDER BY f.id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countPage" resultType="long">
+        SELECT count(*)
+        FROM file_metadata f
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND f.file_name ILIKE '%' || #{keyword} || '%'
+            </if>
+            <if test="status != null and status != ''">
+                AND f.status = #{status}
+            </if>
+        </where>
+    </select>
+
+    <update id="updateStatus">
+        UPDATE file_metadata
+        SET status = #{status}, updated_at = now()
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM file_metadata WHERE id = #{id}
+    </delete>
+
 </mapper>

@@ -1,5 +1,6 @@
 package com.library.agent.context;
 
+import com.library.agent.entity.AgentLongTermMemory;
 import com.library.agent.entity.AgentShortTermMemory;
 import com.library.agent.enums.IntentType;
 import lombok.Data;
@@ -49,4 +50,9 @@ public class AgentChatContext {
      * 当前会话摘要
      */
     private String conversationSummary;
+
+    /**
+     * 回答前召回的长期记忆（recall 填充），空列表时 Prompt 不注入该段
+     */
+    private List<AgentLongTermMemory> longTermMemories;
 }

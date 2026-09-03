@@ -80,12 +80,14 @@ public class AuthTokenFilter implements Filter {
                 || path.equals("/auth/login")
                 || path.equals("/error")
                 || path.startsWith("/static/")
+                /* SPA 静态资源（js/css 等，浏览器请求不带 token） */
+                || path.startsWith("/assets/")
+                /* 迁移保留的旧静态页 */
+                || path.startsWith("/legacy/")
                 || path.startsWith("/healthcheck/")
                 || path.equals("/")
                 || path.equals("/index.html")
-                || path.equals("/test.html")
-                || path.equals("/stream.html")
-                || path.equals("/observability.html");
+                || path.equals("/favicon.ico");
     }
 
     private String resolveToken(HttpServletRequest request) {
