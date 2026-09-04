@@ -11,6 +11,7 @@ import org.springframework.core.io.ClassPathResource;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Prompt 构建工具类。
@@ -201,23 +202,16 @@ public final class PromptBuilder {
     }
 
     /**
-     * 根据LLM输出结果组装完整Prompt
+     * 组装复杂任务（第二层任务上下文）的完整 Prompt。
+     * <p>
+     * 调用方必须先经 {@code enums.AgentTask.fromRouteName} 校验任务名并确保资源存在，
+     * 本方法只负责拼接 md 模板与替换占位符，不再解析路由 JSON。
+     *
      * @param agentChatContext 会话上下文
-     * @param routeJSON Task选择结果(还未清洗)
-     * @return 完整的Prompt
+     * @param taskName 已校验的合法任务名（AgentTask.routeName），如 slow_query
+     * @return 完整的 Prompt
      */
-    public static String buildTaskPrompt(AgentChatContext agentChatContext, String routeJSON) throws IOException {
-        // 清洗字符串，去掉开头和结尾的md的JSON符号
-        String routeResult = cleanMarkdownJson(routeJSON);
-        // 解析JSON字符串
-        ObjectMapper objectMapper = new ObjectMapper();
-        JsonNode root = null;
-        try {
-            root = objectMapper.readTree(routeResult);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
-        }
-        String taskName = root.get("task").asText();
+    public static String buildTaskPrompt(AgentChatContext agentChatContext, String taskName) throws IOException {
         StringBuilder taskPrompt = new StringBuilder();
         // 读取md文件
         String roleAndObjectivePrompt = loadMarkdown("Prompt/RoleAndObjectivePrompt.md");
@@ -237,6 +231,35 @@ public final class PromptBuilder {
                 .replace("{{conversation_summary}}", agentChatContext.getConversationSummary())
                 .replace("{{recent_history}}", buildHistory(agentChatContext.getHistoryMessages()))
                 .replace("{{long_term_memory}}", buildLongTermMemoryText(agentChatContext.getLongTermMemories()));
+    }
+
+    /**
+     * 从路由 LLM 输出中解析出 task 字段的原始值。
+     * <p>
+     * 只做语法层面的宽容解析：容忍 Markdown 围栏与前后缀、缺 task 字段、task 为空、
+     * 整体非 JSON 等，一律返回空而不抛异常；语义校验由 AgentTask.fromRouteName 负责。
+     *
+     * @param routeJSON 路由模型原始输出
+     * @return 原始任务名字符串；无法解析/缺失/为空时返回空
+     */
+    public static Optional<String> extractRouteTask(String routeJSON) {
+        if (routeJSON == null || routeJSON.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            String cleaned = cleanMarkdownJson(routeJSON);
+            if (cleaned.isEmpty()) {
+                return Optional.empty();
+            }
+            JsonNode root = new ObjectMapper().readTree(cleaned);
+            String taskName = root.path("task").asText("");
+            if (taskName.isBlank()) {
+                return Optional.empty();
+            }
+            return Optional.of(taskName.trim());
+        } catch (JsonProcessingException e) {
+            return Optional.empty();
+        }
     }
 
     /**

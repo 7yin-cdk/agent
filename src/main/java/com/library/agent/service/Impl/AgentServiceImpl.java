@@ -15,6 +15,7 @@ import com.library.agent.llm.LlmService;
 import com.library.agent.llm.PromptBuilder;
 import com.library.agent.llm.QueryRewriteResult;
 import com.library.agent.llm.QueryRewriteService;
+import com.library.agent.llm.TaskRoutingService;
 import com.library.agent.llm.ToolCallingService;
 import com.library.agent.memory.ConversationSummaryService;
 import com.library.agent.memory.LongTermMemoryService;
@@ -68,6 +69,7 @@ public class AgentServiceImpl implements AgentService {
     private final ToolCallingService toolCallingService;
     private final QueryRewriteService queryRewriteService;
     private final LongTermMemoryService longTermMemoryService;
+    private final TaskRoutingService taskRoutingService;
     private final Tracer tracer;
 
     /**
@@ -264,16 +266,14 @@ public class AgentServiceImpl implements AgentService {
                     onDelta
             );
             case COMPLEX_TASK -> {
-                String routePrompt = PromptBuilder.buildRoutePrompt(
-                        context.getQuery(),
-                        context.getConversationSummary(),
-                        context.getHistoryMessages()
-                );
-                // TODO 改为专门意图识别的大模型调用
-                String routeResult = llmService.chat(routePrompt);
-                String taskPrompt = null;
+                TaskRoutingService.RouteResolution resolution = taskRoutingService.resolve(context);
+                if (!resolution.matched()) {
+                    onDelta.accept(resolution.noMatchMessage());
+                    return;
+                }
+                String taskPrompt;
                 try {
-                    taskPrompt = PromptBuilder.buildTaskPrompt(context, routeResult);
+                    taskPrompt = PromptBuilder.buildTaskPrompt(context, resolution.task().routeName());
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }

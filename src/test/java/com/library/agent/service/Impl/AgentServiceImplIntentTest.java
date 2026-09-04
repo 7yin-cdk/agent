@@ -4,6 +4,7 @@ import com.library.agent.conversation.service.ConversationService;
 import com.library.agent.enums.IntentType;
 import com.library.agent.llm.LlmService;
 import com.library.agent.llm.QueryRewriteService;
+import com.library.agent.llm.TaskRoutingService;
 import com.library.agent.llm.ToolCallingService;
 import com.library.agent.memory.ConversationSummaryService;
 import com.library.agent.memory.LongTermMemoryService;
@@ -84,6 +85,7 @@ class AgentServiceImplIntentTest {
                 mock(ToolCallingService.class),
                 mock(QueryRewriteService.class),
                 mock(LongTermMemoryService.class),
+                mock(TaskRoutingService.class),
                 mock(Tracer.class)
         );
     }

@@ -9,6 +9,7 @@ import com.library.agent.llm.LlmService;
 import com.library.agent.llm.PromptBuilder;
 import com.library.agent.llm.QueryRewriteResult;
 import com.library.agent.llm.QueryRewriteService;
+import com.library.agent.llm.TaskRoutingService;
 import com.library.agent.llm.ToolCallingService;
 import com.library.agent.memory.ConversationSummaryService;
 import com.library.agent.memory.LongTermMemoryService;
@@ -49,6 +50,7 @@ public class ReactiveStreamingService {
     private final ShortTermMemoryService shortTermMemoryService;
     private final ConversationSummaryService conversationSummaryService;
     private final ToolCallingService toolCallingService;
+    private final TaskRoutingService taskRoutingService;
     private final QueryRewriteService queryRewriteService;
     private final LongTermMemoryService longTermMemoryService;
     private final ConversationTraceService traceService;
@@ -178,23 +180,14 @@ public class ReactiveStreamingService {
                 recordLlmStreamCall(collector, "RAG_GENERATE", prompt);
             }
             case COMPLEX_TASK -> {
-                String routePrompt = PromptBuilder.buildRoutePrompt(
-                        context.getQuery(),
-                        context.getConversationSummary(),
-                        context.getHistoryMessages());
-                long routeStart = System.currentTimeMillis();
-                String routeResult = llmService.chat(routePrompt);
-                long routeDuration = System.currentTimeMillis() - routeStart;
-                LlmService.TokenUsage routeUsage = llmService.getLastTokenUsage();
-                collector.recordLlmCall("deepseek", "ROUTE", routePrompt, routeResult,
-                        routeUsage != null ? routeUsage.getInputTokens() : 0,
-                        routeUsage != null ? routeUsage.getOutputTokens() : 0,
-                        routeDuration);
-                llmService.clearLastTokenUsage();
-
+                TaskRoutingService.RouteResolution resolution = taskRoutingService.resolve(context, collector);
+                if (!resolution.matched()) {
+                    streamChunks(resolution.noMatchMessage(), onDelta);
+                    return;
+                }
                 String taskPrompt;
                 try {
-                    taskPrompt = PromptBuilder.buildTaskPrompt(context, routeResult);
+                    taskPrompt = PromptBuilder.buildTaskPrompt(context, resolution.task().routeName());
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }

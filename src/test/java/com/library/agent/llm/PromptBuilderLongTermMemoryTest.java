@@ -65,7 +65,7 @@ class PromptBuilderLongTermMemoryTest {
         ctx.setConversationSummary("");
         ctx.setHistoryMessages(List.of());
         ctx.setLongTermMemories(oneProfile());
-        String prompt = PromptBuilder.buildTaskPrompt(ctx, "{\"task\":\"slow_query\"}");
+        String prompt = PromptBuilder.buildTaskPrompt(ctx, "slow_query");
         assertFalse(prompt.contains("{{long_term_memory}}"), "占位符应被替换");
         assertTrue(prompt.contains("### 长期记忆"), "应注入记忆块");
         assertTrue(prompt.contains("【记忆1】[用户画像] 运维小王负责 orders 库与 prod_cluster"), "应含记忆行");
@@ -78,7 +78,7 @@ class PromptBuilderLongTermMemoryTest {
         ctx.setConversationSummary("");
         ctx.setHistoryMessages(List.of());
         ctx.setLongTermMemories(List.of());
-        String prompt = PromptBuilder.buildTaskPrompt(ctx, "{\"task\":\"slow_query\"}");
+        String prompt = PromptBuilder.buildTaskPrompt(ctx, "slow_query");
         assertFalse(prompt.contains("{{long_term_memory}}"), "无记忆也不应泄漏占位符");
         assertFalse(prompt.contains("### 长期记忆"), "无记忆不应有记忆段");
     }

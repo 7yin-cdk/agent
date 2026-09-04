@@ -219,13 +219,13 @@ Output:
 ### Example 5
 
 User:
-帮我写一个Python排序算法
+帮我对比一下这两条 SQL 的执行计划，看哪一条更适合加索引
 
 Output:
 
 ```json
 {
-  "task": "code_generation"
+  "task": "sql_execution_plan"
 }
 ```
 
@@ -295,6 +295,7 @@ Output:
 
 * 只能输出 JSON
 * 必须选择一个 task
+* task 的值必须与上方 Available Task Contexts 中列出的任务名完全一致，禁止输出清单之外的任何新任务名
 * 不允许输出 reasoning
 * 不允许调用工具
 * 不允许回答用户问题

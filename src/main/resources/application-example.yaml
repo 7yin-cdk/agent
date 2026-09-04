@@ -71,6 +71,8 @@ rocketmq:
 agent:
   tool:
     timeout-seconds: 30
+  task:
+    max-route-attempts: 2   # 路由阶段 LLM 总调用次数(含首次)；超限未命中则回退"无匹配能力"文案
   healthcheck:
     enabled: true
     cron: "0 */1 * * * *"
