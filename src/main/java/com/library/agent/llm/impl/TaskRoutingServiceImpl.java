@@ -28,8 +28,6 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class TaskRoutingServiceImpl implements TaskRoutingService {
 
-    private static final String LLM_MODEL_NAME = "deepseek";
-
     private final LlmService llmService;
 
     /**
@@ -90,7 +88,7 @@ public class TaskRoutingServiceImpl implements TaskRoutingService {
 
         if (collector != null) {
             LlmService.TokenUsage usage = llmService.getLastTokenUsage();
-            collector.recordLlmCall(LLM_MODEL_NAME,
+            collector.recordLlmCall(llmService.getLastUsedModel(),
                     firstAttempt ? "ROUTE" : "ROUTE_RETRY",
                     prompt, result,
                     usage != null ? usage.getInputTokens() : 0,

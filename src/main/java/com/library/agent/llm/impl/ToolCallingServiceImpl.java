@@ -6,6 +6,7 @@ import com.library.agent.context.AgentChatContext;
 import com.library.agent.entity.AgentShortTermMemory;
 import com.library.agent.llm.ToolCallingService;
 import com.library.agent.observability.ConversationTraceCollector;
+import com.library.agent.tool.ToolAccess;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
@@ -51,8 +52,14 @@ public class ToolCallingServiceImpl implements ToolCallingService {
     private static final String APPLICATION_PACKAGE_PREFIX = "com.library.agent";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
+    /* ReAct 使用 langchain4j ChatModel（对应百炼配置），provider 固定为 bailian */
+    private static final String REACT_PROVIDER = "bailian";
+
     @Value("${agent.tool.timeout-seconds:30}")
     private int toolTimeoutSeconds;
+
+    @Value("${bailian.chat-model:qwen-plus}")
+    private String reactChatModel;
 
     /**
      * 工具执行专用线程池，用于 CompletableFuture 超时控制。
@@ -93,8 +100,13 @@ public class ToolCallingServiceImpl implements ToolCallingService {
                     throw new IllegalStateException("Duplicate tool name: " + toolName);
                 }
 
+                /* 读取工具访问类型注解，未标注默认为只读 */
+                ToolAccess toolAccess = method.getAnnotation(ToolAccess.class);
+                ToolAccess.Type accessType = toolAccess == null
+                        ? ToolAccess.Type.READ : toolAccess.value();
+
                 ToolExecutor executor = new DefaultToolExecutor(bean, method);
-                registeredTools.put(toolName, new RegisteredTool(specification, executor));
+                registeredTools.put(toolName, new RegisteredTool(specification, executor, accessType));
                 log.info("Registered ReAct tool, name={}, method={}.{}",
                         toolName,
                         beanClass.getSimpleName(),
@@ -131,6 +143,9 @@ public class ToolCallingServiceImpl implements ToolCallingService {
         Object memoryId = context == null ? null : context.getConversationId();
         String lastFailedToolName = null;
         int sameToolConsecutiveFailures = 0;
+        /* 严格落字校验开关与用户本轮原话：用户对话链路开启，自动巡检（HealthCheckRunner）关闭 */
+        boolean strict = context != null && context.isGroundingEnabled();
+        String userQuery = userQuestion(context, reactPrompt);
 
         for (int stepNumber = 1; stepNumber <= MAX_REACT_STEPS; stepNumber++) {
             try {
@@ -173,7 +188,8 @@ public class ToolCallingServiceImpl implements ToolCallingService {
                             ? "Tool task finished, but no answer was returned." : answer;
                 }
 
-                ToolCallValidationResult validationResult = validateToolAction(decision.tool());
+                ToolCallValidationResult validationResult =
+                        validateToolAction(decision.tool(), userQuery, strict);
                 if (!validationResult.ok()) {
                     return validationResult.message();
                 }
@@ -222,6 +238,9 @@ public class ToolCallingServiceImpl implements ToolCallingService {
         Object memoryId = context == null ? null : context.getConversationId();
         String lastFailedToolName = null;
         int sameToolConsecutiveFailures = 0;
+        /* 严格落字校验开关与用户本轮原话：用户对话链路开启，自动巡检（HealthCheckRunner）关闭 */
+        boolean strict = context != null && context.isGroundingEnabled();
+        String userQuery = userQuestion(context, reactPrompt);
 
         for (int stepNumber = 1; stepNumber <= MAX_REACT_STEPS; stepNumber++) {
             try {
@@ -242,8 +261,8 @@ public class ToolCallingServiceImpl implements ToolCallingService {
                         ? response.tokenUsage().outputTokenCount() : 0;
                 int inputTokens = response.tokenUsage() != null
                         ? response.tokenUsage().inputTokenCount() : 0;
-                collector.recordLlmCall("deepseek", "REACT_LLM", finalPrompt, modelOutput,
-                        inputTokens, outputTokens, llmDuration);
+                collector.recordLlmCall(REACT_PROVIDER + "/" + reactChatModel, "REACT_LLM",
+                        finalPrompt, modelOutput, inputTokens, outputTokens, llmDuration);
                 log.info("ReAct step={} model output length={}", stepNumber,
                         modelOutput != null ? modelOutput.length() : 0);
 
@@ -269,7 +288,8 @@ public class ToolCallingServiceImpl implements ToolCallingService {
                             ? "Tool task finished, but no answer was returned." : answer;
                 }
 
-                ToolCallValidationResult validationResult = validateToolAction(decision.tool());
+                ToolCallValidationResult validationResult =
+                        validateToolAction(decision.tool(), userQuery, strict);
                 if (!validationResult.ok()) {
                     return validationResult.message();
                 }
@@ -514,7 +534,13 @@ Rules:
         String argumentSources = argumentSourcesNode == null || argumentSourcesNode.isNull()
                 ? "{}"
                 : OBJECT_MAPPER.writeValueAsString(argumentSourcesNode);
-        return new ReActToolAction(name, arguments, argumentSources);
+
+        /* 可选字段：指代参数的候选对象（{argName: [candidate,...] }），缺省为空对象 */
+        JsonNode argumentCandidatesNode = toolNode.get("argument_candidates");
+        String argumentCandidates = argumentCandidatesNode == null || argumentCandidatesNode.isNull()
+                ? "{}"
+                : OBJECT_MAPPER.writeValueAsString(argumentCandidatesNode);
+        return new ReActToolAction(name, arguments, argumentSources, argumentCandidates);
     }
 
     private ToolExecutionRequest toToolExecutionRequest(ReActToolAction action) {
@@ -525,24 +551,36 @@ Rules:
                 .build();
     }
 
-    private ToolCallValidationResult validateToolAction(ReActToolAction action) {
+    /**
+     * 校验工具调用动作是否可放行执行。
+     * <p>
+     * 结构性错误（不可解析、键不一致、非法来源枚举）立即拒绝；对必填参数，
+     * 在严格落字校验（strict=true，用户对话链路）下依据
+     * {@link ToolCallGuard}：参数值须出现在用户本轮原话，写工具不允许按指代放行，
+     * 只读工具的指代参数在候选唯一且与选中值一致时方可放行。所有“需用户澄清/补齐”
+     * 的问题聚合成一条消息返回，避免多参数时反复追问。
+     *
+     * @param action    LLM 输出的工具调用
+     * @param userQuery 用户本轮原话，用于落字校验
+     * @param strict    是否启用严格落字校验（自动巡检链路为 false，维持旧语义）
+     */
+    private ToolCallValidationResult validateToolAction(ReActToolAction action,
+                                                        String userQuery,
+                                                        boolean strict) {
 
-        // 1. Tool Action不能为空
+        /* 1. Tool Action不能为空 */
         if (action == null) {
-            return ToolCallValidationResult.reject(
-                    "Tool action is missing."
-            );
+            return ToolCallValidationResult.reject("Tool action is missing.");
         }
 
-        // 2. 解析 arguments
-        JsonNode arguments =
-                readObjectNode(action.arguments(), "tool.arguments");
+        /* 2. 解析 arguments */
+        JsonNode arguments = readObjectNode(action.arguments(), "tool.arguments");
 
-        // 3. 解析 argument_sources
+        /* 3. 解析 argument_sources */
         JsonNode argumentSources =
                 readObjectNode(action.argumentSources(), "tool.argument_sources");
 
-        // 4. arguments 与 argument_sources必须拥有完全相同的key
+        /* 4. arguments 与 argument_sources必须拥有完全相同的key */
         Map<String, JsonNode> argumentMap = new LinkedHashMap<>();
         arguments.fields().forEachRemaining(
                 entry -> argumentMap.put(entry.getKey(), entry.getValue())
@@ -559,49 +597,40 @@ Rules:
             );
         }
 
-        // 5. 校验必填参数
+        /* 5. 容错解析候选对象（可选字段，坏 JSON 降级为空对象） */
+        JsonNode candidateSources = readCandidates(action.argumentCandidates());
+
+        /* 6. 工具访问类型（读/写） */
+        RegisteredTool registeredTool = registeredTools.get(action.name());
+        ToolAccess.Type access = registeredTool == null
+                ? ToolAccess.Type.READ : registeredTool.accessType();
+
+        /* 7. 校验必填参数，聚合需用户澄清/补齐的追问 */
+        List<String> asks = new ArrayList<>();
         for (String requiredArgument : requiredArgumentNames(action.name())) {
 
             JsonNode argumentValue = arguments.get(requiredArgument);
 
-            // 参数不存在
-            if (argumentValue == null || argumentValue.isNull()) {
-                return ToolCallValidationResult.reject(
-                        clarificationMessage(requiredArgument)
-                );
+            /* 参数不存在或为空字符串 */
+            if (argumentValue == null || argumentValue.isNull()
+                    || (argumentValue.isValueNode() && argumentValue.asText("").isBlank())) {
+                asks.add(missingArgumentMessage(requiredArgument));
+                continue;
             }
 
-            // 参数为空字符串
-            if (argumentValue.isValueNode()
-                    && argumentValue.asText("").isBlank()) {
-
-                return ToolCallValidationResult.reject(
-                        clarificationMessage(requiredArgument)
-                );
-            }
-
-            // 校验必填参数的source
+            /* 校验必填参数的source */
             JsonNode sourceNode = argumentSources.get(requiredArgument);
-
-            if (sourceNode == null
-                    || sourceNode.isNull()
-                    || sourceNode.asText("").isBlank()) {
-
-                return ToolCallValidationResult.reject(
-                        clarificationMessage(requiredArgument)
-                );
+            if (sourceNode == null || sourceNode.isNull() || sourceNode.asText("").isBlank()) {
+                asks.add(missingSourceMessage(requiredArgument));
+                continue;
             }
 
-            String source =
-                    sourceNode.asText("")
-                            .trim()
-                            .toUpperCase();
+            String source = sourceNode.asText("").trim().toUpperCase();
 
-            // source必须是合法枚举值
+            /* source必须是合法枚举值 */
             if (!source.equals("EXPLICIT_CURRENT")
                     && !source.equals("REFERENCED_CURRENT")
                     && !source.equals("HISTORY_ONLY")) {
-
                 return ToolCallValidationResult.reject(
                         "Invalid argument source for parameter: "
                                 + requiredArgument
@@ -610,18 +639,70 @@ Rules:
                 );
             }
 
-            // 核心业务规则
-            // required参数不能只来自历史
-            if ("HISTORY_ONLY".equals(source)) {
+            /* 提取参数值文本；对象/数组等非标量值无法落字，交由严格校验判定 */
+            String valueText = argumentValue.isTextual()
+                    ? argumentValue.asText()
+                    : argumentValue.isValueNode() ? argumentValue.asText("") : "";
 
-                return ToolCallValidationResult.reject(
-                        clarificationMessage(requiredArgument)
-                );
+            String ask = ToolCallGuard.evaluate(
+                    strict, access, source, requiredArgument, valueText,
+                    userQuery, candidatesFor(requiredArgument, candidateSources));
+            if (ask != null) {
+                asks.add(ask);
             }
         }
 
-        // 全部通过
+        /* 全部通过或存在需澄清项 */
+        if (!asks.isEmpty()) {
+            return ToolCallValidationResult.reject(String.join("\n", asks));
+        }
         return ToolCallValidationResult.allow();
+    }
+
+    /**
+     * 读取某参数在 LLM 输出的 argument_candidates 中的候选对象列表。
+     */
+    private List<String> candidatesFor(String argumentName, JsonNode candidateSources) {
+        if (candidateSources == null) {
+            return List.of();
+        }
+        JsonNode node = candidateSources.get(argumentName);
+        if (node == null || !node.isArray()) {
+            return List.of();
+        }
+        List<String> candidates = new ArrayList<>();
+        for (JsonNode item : node) {
+            if (item != null && item.isValueNode() && !item.asText("").isBlank()) {
+                candidates.add(item.asText());
+            }
+        }
+        return candidates;
+    }
+
+    /**
+     * 容错解析 argument_candidates JSON；缺失或格式非法时降级为空对象，
+     * 由严格校验的“无法确认指代 → 追问”分支兜底。
+     */
+    private JsonNode readCandidates(String json) {
+        if (json == null || json.isBlank()) {
+            return OBJECT_MAPPER.createObjectNode();
+        }
+        try {
+            JsonNode node = OBJECT_MAPPER.readTree(json);
+            return node != null && node.isObject() ? node : OBJECT_MAPPER.createObjectNode();
+        } catch (Exception e) {
+            log.warn("Failed to parse tool.argument_candidates, degraded to empty: {}", json);
+            return OBJECT_MAPPER.createObjectNode();
+        }
+    }
+
+    private String missingArgumentMessage(String argumentName) {
+        return "缺少必填工具参数「" + argumentName + "」，请在本轮提问中提供该参数的准确值。";
+    }
+
+    private String missingSourceMessage(String argumentName) {
+        return "工具参数「" + argumentName
+                + "」缺少参数来源标注，无法确认其由用户在本轮提供，请明确给出该参数取值。";
     }
 
     private List<String> requiredArgumentNames(String toolName) {
@@ -686,20 +767,6 @@ Rules:
         } catch (Exception e) {
             throw new IllegalStateException("Failed to parse " + fieldName + ": " + json, e);
         }
-    }
-
-    private String normalizeForEvidence(String text) {
-        if (text == null) {
-            return "";
-        }
-        return text.trim()
-                .replaceAll("\\s+", "")
-                .toLowerCase();
-    }
-
-    private String clarificationMessage(String argumentName) {
-        return "Missing required tool parameter from the current user input: " + argumentName
-                + ". Please provide this parameter explicitly.";
     }
 
     private ReActObservation executeTool(ToolExecutionRequest toolRequest, Object memoryId) {
@@ -798,6 +865,7 @@ Rules:
             actionMap.put("name", action.name());
             actionMap.put("arguments", arguments);
             actionMap.put("argument_sources", OBJECT_MAPPER.readTree(action.argumentSources()));
+            actionMap.put("argument_candidates", OBJECT_MAPPER.readTree(action.argumentCandidates()));
             return OBJECT_MAPPER.writeValueAsString(actionMap);
         } catch (Exception e) {
             return toJson(action);
@@ -814,7 +882,8 @@ Rules:
                 .toList();
     }
 
-    private record RegisteredTool(ToolSpecification specification, ToolExecutor executor) {
+    private record RegisteredTool(ToolSpecification specification, ToolExecutor executor,
+                                  ToolAccess.Type accessType) {
     }
 
     private record ReActDecision(String type, String thought, ReActToolAction tool, ReActFinish finish) {
@@ -824,7 +893,8 @@ Rules:
         }
     }
 
-    private record ReActToolAction(String name, String arguments, String argumentSources) {
+    private record ReActToolAction(String name, String arguments, String argumentSources,
+                                   String argumentCandidates) {
     }
 
     private record ReActFinish(String answer) {

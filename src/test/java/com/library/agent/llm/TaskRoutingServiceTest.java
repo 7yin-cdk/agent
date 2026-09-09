@@ -144,6 +144,11 @@ class TaskRoutingServiceTest {
         }
 
         @Override
+        public String getLastUsedModel() {
+            return "deepseek/deepseek-v4-flash";
+        }
+
+        @Override
         public void clearLastTokenUsage() {
             /* 无状态桩，无需清理 */
         }

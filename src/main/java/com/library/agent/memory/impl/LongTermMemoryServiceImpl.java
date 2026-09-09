@@ -36,7 +36,8 @@ import java.util.regex.Pattern;
 /**
  * 长期记忆服务实现。
  * <p>
- * 抽取：postTurn 判显式"记住"走同步，否则按门槛转异步（经 self 代理避免自调用失效）。
+ * 抽取：postTurn 判显式"记住"走同步，否则按门槛转异步（经 self 代理避免自调用失效）；
+ * 抽取主体仅当前轮问答，历史只取最近 anchor-window 条作上下文锚，避免整段历史每轮回灌。
  * 去重：dedup_key 唯一索引 + 冲突消解（MERGE/REPLACE/KEEP/DELETE）；EXPERIENCE 同问题不同结果保留双行。
  * 召回：always-on + 实体等值 + 向量，RRF 融合后再 rerank，写入 context。
  * 淘汰：写入即查容量、定时清扫物理清理过期/逻辑删除行。
@@ -131,42 +132,65 @@ public class LongTermMemoryServiceImpl implements LongTermMemoryService {
         }
     }
 
-    /**
-     * 构建抽取 prompt：要求 LLM 只输出 JSON 数组。
-     * 恒先注入当前轮的 user 问题与 assistant 回答（设计 §5.1），再按容量去重追加同轮/历史消息，
-     * 避免多轮会话中当前轮内容缺失导致漏抽。
-     * 全部输入为空时返回 null（调用方不触发）。
-     */
-    private String buildExtractPrompt(String userQuery, String assistantAnswer,
-                                      List<AgentShortTermMemory> turnMessages) {
-        List<String> lines = new ArrayList<>();
-        addExtractLine(lines, "user", userQuery);
-        addExtractLine(lines, "assistant", assistantAnswer);
-        if (turnMessages != null) {
-            for (AgentShortTermMemory message : turnMessages) {
-                if (lines.size() >= MAX_EXTRACT_MESSAGES) {
-                    break;
-                }
-                addExtractLine(lines, normalizeRole(message.getRole()), message.getContent());
-            }
-        }
-        if (lines.isEmpty()) {
+    /* 构建抽取 prompt：抽取主体仅含当前轮 user/assistant（设计 §5.1），
+       历史只取最近 anchorWindow 条作上下文锚并明确要求不从中重复抽取，
+       既避免多轮会话中当前轮内容缺失导致漏抽，也避免整段历史每轮回灌。
+       包私有便于抽取逻辑离线单测；主体为空时返回 null（调用方不触发）。 */
+    String buildExtractPrompt(String userQuery, String assistantAnswer,
+                              List<AgentShortTermMemory> turnMessages) {
+        List<String> subjectLines = new ArrayList<>();
+        addExtractLine(subjectLines, "user", userQuery);
+        addExtractLine(subjectLines, "assistant", assistantAnswer);
+        if (subjectLines.isEmpty()) {
             return null;
         }
+        List<String> contextLines = anchorLines(subjectLines, turnMessages);
 
         StringBuilder prompt = new StringBuilder();
         prompt.append("你是数据库运维 Agent 的长期记忆抽取器。\n");
-        prompt.append("从下面这轮对话中抽取值得跨会话长期保存的记忆，只输出 JSON 数组。\n");
+        prompt.append("从下面【本轮新增】的对话抽取值得跨会话长期保存的记忆，只输出 JSON 数组。\n");
         prompt.append("只抽取五类：USER_PROFILE(用户角色/职责/负责的系统)、PREFERENCE(回答偏好)、CONSTRAINT(操作限制/禁止)、ENTITY(运维对象稳定事实)、EXPERIENCE(一次问题→方案→结果的经验，结果须含成功或失败)。\n");
-        prompt.append("不抽取：寒暄、重复内容、纯临时指令、与运维无关的闲聊。\n");
+        prompt.append("【历史上下文】是更早轮次的旧消息，可能已入库，仅供理解指代，不要从中重复抽取。\n");
+        prompt.append("不抽取：寒暄、纯临时指令、与运维无关的闲聊。\n");
         prompt.append("每条对象字段：{\"category\":\"...\",\"content\":\"自包含无指代的中文\",\"keywords\":[\"...\"],\"entity\":\"可选\",\"entity_type\":\"可选\",\"importance\":1-10整数,\"confidence\":0-1小数,\"dedup_key\":\"CATEGORY:归一化主题\"}。\n");
-        prompt.append("要求：只输出 JSON 数组；不要 Markdown 代码块；不要任何多余说明；没有值得保存的内容则输出 []。\n\n");
-        prompt.append("### 本轮对话\n");
-        for (String line : lines) {
+        prompt.append("要求：只输出 JSON 数组；不要 Markdown 代码块；不要任何多余说明；content 须自包含无指代；没有值得保存的内容则输出 []。\n\n");
+        prompt.append("### 本轮新增\n");
+        for (String line : subjectLines) {
             prompt.append(line).append('\n');
+        }
+        if (!contextLines.isEmpty()) {
+            prompt.append("\n### 历史上下文（仅作理解，勿抽取）\n");
+            for (String line : contextLines) {
+                prompt.append(line).append('\n');
+            }
         }
         prompt.append("\n### 输出\n[]");
         return prompt.toString();
+    }
+
+    /* 取 turnMessages（升序）中紧邻当前轮的最近 anchorWindow 条作锚，跳过空行与主体重复行 */
+    private List<String> anchorLines(List<String> subjectLines, List<AgentShortTermMemory> turnMessages) {
+        List<String> contextLines = new ArrayList<>();
+        if (turnMessages == null || turnMessages.isEmpty()) {
+            return contextLines;
+        }
+        int window = Math.max(0, Math.min(properties.getExtraction().getAnchorWindow(), MAX_EXTRACT_MESSAGES));
+        int fromIndex = Math.max(0, turnMessages.size() - window);
+        for (int i = fromIndex; i < turnMessages.size(); i++) {
+            AgentShortTermMemory message = turnMessages.get(i);
+            if (message == null) {
+                continue;
+            }
+            String content = message.getContent();
+            if (content == null || content.isBlank()) {
+                continue;
+            }
+            String line = normalizeRole(message.getRole()) + ": " + content.trim();
+            if (!subjectLines.contains(line) && !contextLines.contains(line)) {
+                contextLines.add(line);
+            }
+        }
+        return contextLines;
     }
 
     private boolean isRememberCommand(String query) {

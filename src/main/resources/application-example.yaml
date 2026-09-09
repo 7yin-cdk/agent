@@ -71,6 +71,15 @@ rocketmq:
 agent:
   tool:
     timeout-seconds: 30
+  llm:
+    retry-attempts: 2               # 对话/生成类 LLM 每个 provider 内的额外重试次数(不含首次)
+    retry-backoff-ms: 500           # 重试线性退避基准毫秒
+    circuit-failure-threshold: 5    # 连续失败达到该值即熔断该 provider
+    circuit-open-ms: 30000          # 熔断时长，到期后进入半开单探针恢复
+  ltm:
+    extraction:
+      min-turn-messages: 2   # 常规异步抽取前至少已有的历史条数(新会话首轮不抽)
+      anchor-window: 6       # 抽取 prompt 注入的历史上下文锚条数上限(仅作上下文，不从中抽取)
   task:
     max-route-attempts: 2   # 路由阶段 LLM 总调用次数(含首次)；超限未命中则回退"无匹配能力"文案
   healthcheck:

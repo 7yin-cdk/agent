@@ -176,6 +176,7 @@ public class SlowQueryTool {
      * @return 操作结果
      */
     @Tool("重置pg_stat_statements统计数据，清空所有历史慢查询记录，重新开始统计")
+    @ToolAccess(ToolAccess.Type.WRITE)
     public String resetSlowQueryStats(
             @P("数据库实例地址，格式为 host:port") String instance,
             @P("数据库名称") String database) {

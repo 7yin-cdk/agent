@@ -25,7 +25,7 @@ public interface LongTermMemoryService {
      * @param conversationId  会话 ID
      * @param userQuery       用户本轮问题
      * @param assistantAnswer 助手本轮回答
-     * @param turnMessages    本轮内产生或参与的消息（含 user/assistant/tool）
+     * @param turnMessages    回答前加载的历史消息，仅取最近数条作上下文锚，非抽取主体
      * @param sourceTurn      溯源轮次标记，可为 null
      */
     void postTurn(Long userId, String conversationId, String userQuery,

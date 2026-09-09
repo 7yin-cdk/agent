@@ -162,6 +162,8 @@ public class HealthCheckRunner {
         context.setConversationId(runId);
         context.setIntentType(IntentType.COMPLEX_TASK);
         context.setHistoryMessages(List.of());
+        /* 自动巡检链路：参数由模型自生成、无真实用户落字，关闭严格落字校验 */
+        context.setGroundingEnabled(false);
 
         ConversationTraceCollector trace = new ConversationTraceCollector(null, runId, "scheduled-healthcheck-" + runId);
         boolean llmOk = false;

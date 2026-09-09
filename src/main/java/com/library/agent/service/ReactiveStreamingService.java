@@ -215,7 +215,7 @@ public class ReactiveStreamingService {
     private void recordLlmStreamCall(ConversationTraceCollector collector,
                                      String callType, String prompt) {
         LlmService.TokenUsage usage = llmService.getLastTokenUsage();
-        collector.recordLlmCall("deepseek", callType, prompt, "(streaming)",
+        collector.recordLlmCall(llmService.getLastUsedModel(), callType, prompt, "(streaming)",
                 usage != null ? usage.getInputTokens() : 0,
                 usage != null ? usage.getOutputTokens() : 0,
                 0);
@@ -281,7 +281,7 @@ public class ReactiveStreamingService {
             long duration = System.currentTimeMillis() - startMs;
 
             LlmService.TokenUsage usage = llmService.getLastTokenUsage();
-            collector.recordLlmCall("deepseek", "INTENT", intentPrompt, result,
+            collector.recordLlmCall(llmService.getLastUsedModel(), "INTENT", intentPrompt, result,
                     usage != null ? usage.getInputTokens() : 0,
                     usage != null ? usage.getOutputTokens() : 0,
                     duration);

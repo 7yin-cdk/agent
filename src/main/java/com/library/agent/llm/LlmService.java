@@ -79,7 +79,16 @@ public interface LlmService {
     TokenUsage getLastTokenUsage();
 
     /**
-     * 清理最后一次 LLM 调用的 Token 用量记录。
+     * 获取最后一次 LLM 调用实际使用的模型标识（provider/model）。
+     * <p>
+     * 加入多级降级后实际命中可能是备用 provider，故在成功调用后通过 ThreadLocal
+     * 暴露真实模型，供可观测层记录；与 {@link #getLastTokenUsage()} 生命周期一致，
+     * 由 clearLastTokenUsage() 一并清理。
+     */
+    String getLastUsedModel();
+
+    /**
+     * 清理最后一次 LLM 调用的 Token 用量与模型标识记录。
      */
     void clearLastTokenUsage();
 }

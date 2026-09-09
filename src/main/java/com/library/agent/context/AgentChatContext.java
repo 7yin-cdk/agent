@@ -55,4 +55,13 @@ public class AgentChatContext {
      * 回答前召回的长期记忆（recall 填充），空列表时 Prompt 不注入该段
      */
     private List<AgentLongTermMemory> longTermMemories;
+
+    /**
+     * 是否对工具参数启用严格“落字校验”（参数值必须出现在本轮用户原话中）。
+     * <p>
+     * 默认开启，适用于真实用户对话链路（AgentServiceImpl / ReactiveStreamingService）。
+     * <b>任何自动化的 ReAct 调用方（如 HealthCheckRunner 定时巡检）必须显式置为 false</b>，
+     * 因为其工具参数（如邮件正文/主题）由模型自生成、无真实用户落字可供校验。
+     */
+    private boolean groundingEnabled = true;
 }

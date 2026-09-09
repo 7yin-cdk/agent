@@ -37,6 +37,7 @@ public class EmailAlertTool {
      * @return 发送结果 JSON
      */
     @Tool("向指定数据库实例的预配置告警联系人发送告警邮件，收件人由配置决定。邮件正文需包含异常指标、当前值、阈值与优化建议")
+    @ToolAccess(ToolAccess.Type.WRITE)
     public String sendAlertEmail(
             @P("数据库实例业务名，在巡检配置中定义，例如：rag库") String instanceName,
             @P("本轮巡检的 runId，必须使用任务给定的值") String runId,

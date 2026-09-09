@@ -18,6 +18,9 @@ Return exactly one JSON object using one of these two forms.
 },
 "argument_sources": {
 "argumentName": "EXPLICIT_CURRENT or REFERENCED_CURRENT or HISTORY_ONLY"
+},
+"argument_candidates": {
+"argumentName": ["候选对象1", "候选对象2", "..."]
 }
 },
 "finish": null
@@ -38,17 +41,19 @@ Return exactly one JSON object using one of these two forms.
 - `tool.arguments` must match the selected tool schema.
 - Every key in `tool.arguments` must have the exact same key in `tool.argument_sources`.
 - Each argument source must be exactly one of:
-    - `EXPLICIT_CURRENT`: 参数值在【Current user question】中明确陈述。
-    - `REFERENCED_CURRENT`: 参数值未明确陈述，但【Current user question】中包含代词、引用等明确指向该值的表达。
+    - `EXPLICIT_CURRENT`: 参数值在【Current user question】中**明确陈述**（系统会做落字校验，值需真实出现在用户本轮原话）。
+    - `REFERENCED_CURRENT`: 参数值未明确陈述，但【Current user question】中包含代词、引用等明确指向该值的表达。此时**必须**在 `argument_candidates` 中给出同名键，列出该参数**全部可选**的指代对象（来自 Recent conversation history / Conversation summary / Specific Task Context），不得只列一个，也不得为空。
       *Examples:*
         - History: "北京天气怎么样" | Current: "那它明天呢" -> city: REFERENCED_CURRENT
     - `HISTORY_ONLY`: 参数值在当前问题中未提及或引用，只能从【Conversation summary】或【Recent conversation history】中获取。
+- 误标来源会被拦截：若 `EXPLICIT_CURRENT` 的值未出现在用户原话，或 `REFERENCED_CURRENT` 无法确定唯一指代对象，工具将不执行并转为向用户追问。
 
 ## Parameter Provision Rules (参数提供与拦截规则)
-- 如果参数来源是 `EXPLICIT_CURRENT` 或 `REFERENCED_CURRENT`，则视为用户在当前轮次**已提供**。
-- 如果参数来源是 `HISTORY_ONLY`，则视为用户在当前轮次**未提供**。
-- **关键限制**：如果任何必需的（required）工具参数来源是 `HISTORY_ONLY`，**禁止调用该工具**。必须使用 `type=finish`，并在 `finish.answer` 中要求用户明确提供或确认该缺失参数（这与 Specific Task Context 中“询问用户”的流程要求一致）。
+- 参数值**确实出现在当前轮次用户原话中**时，视为用户已提供，任意工具均可放行。
+- **写/副作用工具**（重置统计、发送邮件等）：必须使用 `EXPLICIT_CURRENT`，参数值需在当前提问中**字面给出**，**禁止**按指代解析或推断，否则工具被拦截并追问。
+- **只读工具**：若参数为 `REFERENCED_CURRENT`，仅在指代对象**唯一**时可执行；存在多个候选或无法确认时会被拦截并追问用户确认具体对象。
+- 来源为 `HISTORY_ONLY` 的必填参数一律视为当前轮次**未提供**。
 
 ## Action Rules
-- Use `type=tool` when a registered tool is needed and all required parameters are provided in the current turn.
-- Use `type=finish` when enough information is available to answer, or when required parameters are missing (HISTORY_ONLY) and the user must clarify.
+- Use `type=tool` when a registered tool is needed and all required parameters are provided in the current turn: their literal values appear in the Current user question, or a read-only tool resolves an unambiguous single referent (`argument_candidates` size is 1).
+- Use `type=finish` when enough information is available to answer, or when required parameters are missing (HISTORY_ONLY / 字面未提供 / 指代不唯一) and the user must clarify.

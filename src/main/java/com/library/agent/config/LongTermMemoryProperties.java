@@ -145,5 +145,10 @@ public class LongTermMemoryProperties {
          * 触发抽取的最少轮内消息数，默认 2。
          */
         private int minTurnMessages = 2;
+
+        /**
+         * 注入抽取 prompt 的历史上下文锚条数上限，默认 6；仅作上下文不从中抽取。
+         */
+        private int anchorWindow = 6;
     }
 }
