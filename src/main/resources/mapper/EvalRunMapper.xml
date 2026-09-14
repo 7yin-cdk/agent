@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.library.agent.mapper.EvalRunMapper">
+
+    <resultMap id="EvalRunResultMap" type="com.library.agent.entity.EvalRun">
+        <id property="id" column="id"/>
+        <result property="runId" column="run_id"/>
+        <result property="suiteName" column="suite_name"/>
+        <result property="datasetVersion" column="dataset_version"/>
+        <result property="agentCommit" column="agent_commit"/>
+        <result property="modelVersion" column="model_version"/>
+        <result property="judgeVersion" column="judge_version"/>
+        <result property="judgePromptVersion" column="judge_prompt_version"/>
+        <result property="status" column="status"/>
+        <result property="startedAt" column="started_at"
+                typeHandler="com.library.agent.handler.TimestamptzLocalDateTimeTypeHandler"/>
+        <result property="finishedAt" column="finished_at"
+                typeHandler="com.library.agent.handler.TimestamptzLocalDateTimeTypeHandler"/>
+        <result property="totalCases" column="total_cases"/>
+        <result property="successCases" column="success_cases"/>
+        <result property="avgTokens" column="avg_tokens"/>
+        <result property="p95Tokens" column="p95_tokens"/>
+        <result property="avgDurationMs" column="avg_duration_ms"/>
+        <result property="p95DurationMs" column="p95_duration_ms"/>
+        <result property="avgQualityScore" column="avg_quality_score"/>
+        <result property="summaryJson" column="summary_json"
+                typeHandler="com.library.agent.handler.JsonbTypeHandler"/>
+        <result property="createdAt" column="created_at"
+                typeHandler="com.library.agent.handler.TimestamptzLocalDateTimeTypeHandler"/>
+    </resultMap>
+
+    <insert id="insert"
+            parameterType="com.library.agent.entity.EvalRun"
+            useGeneratedKeys="true"
+            keyProperty="id">
+        INSERT INTO agent_eval_run
+        (
+            run_id,
+            suite_name,
+            dataset_version,
+            agent_commit,
+            model_version,
+            judge_version,
+            judge_prompt_version,
+            status,
+            started_at,
+            finished_at,
+            total_cases,
+            success_cases,
+            avg_tokens,
+            p95_tokens,
+            avg_duration_ms,
+            p95_duration_ms,
+            avg_quality_score,
+            summary_json,
+            created_at
+        )
+        VALUES
+        (
+            #{runId},
+            #{suiteName},
+            #{datasetVersion},
+            #{agentCommit},
+            #{modelVersion},
+            #{judgeVersion},
+            #{judgePromptVersion},
+            COALESCE(#{status}, 'RUNNING'),
+            #{startedAt},
+            #{finishedAt},
+            COALESCE(#{totalCases}, 0),
+            COALESCE(#{successCases}, 0),
+            #{avgTokens},
+            #{p95Tokens},
+            #{avgDurationMs},
+            #{p95DurationMs},
+            #{avgQualityScore},
+            COALESCE(#{summaryJson, jdbcType=OTHER, typeHandler=com.library.agent.handler.JsonbTypeHandler}, '{}'::jsonb),
+            COALESCE(#{createdAt}, CURRENT_TIMESTAMP)
+        )
+    </insert>
+
+    <!-- 批次收尾：仅更新非空字段，避免部分更新覆盖已有值 -->
+    <update id="updateSummary" parameterType="com.library.agent.entity.EvalRun">
+        UPDATE agent_eval_run
+        SET status           = COALESCE(#{status}, status),
+            finished_at      = COALESCE(#{finishedAt}, finished_at),
+            total_cases      = COALESCE(#{totalCases}, total_cases),
+            success_cases    = COALESCE(#{successCases}, success_cases),
+            avg_tokens       = COALESCE(#{avgTokens}, avg_tokens),
+            p95_tokens       = COALESCE(#{p95Tokens}, p95_tokens),
+            avg_duration_ms  = COALESCE(#{avgDurationMs}, avg_duration_ms),
+            p95_duration_ms  = COALESCE(#{p95DurationMs}, p95_duration_ms),
+            avg_quality_score = COALESCE(#{avgQualityScore}, avg_quality_score),
+            summary_json     = COALESCE(#{summaryJson, jdbcType=OTHER, typeHandler=com.library.agent.handler.JsonbTypeHandler}, summary_json)
+        WHERE run_id = #{runId}
+    </update>
+
+    <select id="selectByRunId" resultMap="EvalRunResultMap">
+        SELECT *
+        FROM agent_eval_run
+        WHERE run_id = #{runId}
+    </select>
+
+</mapper>

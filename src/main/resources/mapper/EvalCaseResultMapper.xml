@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.library.agent.mapper.EvalCaseResultMapper">
+
+    <resultMap id="EvalCaseResultResultMap" type="com.library.agent.entity.EvalCaseResult">
+        <id property="id" column="id"/>
+        <result property="runId" column="run_id"/>
+        <result property="caseId" column="case_id"/>
+        <result property="category" column="category"/>
+        <result property="difficulty" column="difficulty"/>
+        <result property="query" column="query"/>
+        <result property="traceId" column="trace_id"/>
+        <result property="taskSuccess" column="task_success"/>
+        <result property="successReason" column="success_reason"/>
+        <result property="qualityScores" column="quality_scores"
+                typeHandler="com.library.agent.handler.JsonbTypeHandler"/>
+        <result property="qualityTotal" column="quality_total"/>
+        <result property="toolSelection" column="tool_selection"
+                typeHandler="com.library.agent.handler.JsonbTypeHandler"/>
+        <result property="paramResult" column="param_result"
+                typeHandler="com.library.agent.handler.JsonbTypeHandler"/>
+        <result property="retrievalResult" column="retrieval_result"
+                typeHandler="com.library.agent.handler.JsonbTypeHandler"/>
+        <result property="judgeReason" column="judge_reason"/>
+        <result property="humanScores" column="human_scores"
+                typeHandler="com.library.agent.handler.JsonbTypeHandler"/>
+        <result property="humanChecked" column="human_checked"/>
+        <result property="totalInputTokens" column="total_input_tokens"/>
+        <result property="totalOutputTokens" column="total_output_tokens"/>
+        <result property="totalTokens" column="total_tokens"/>
+        <result property="durationMs" column="duration_ms"/>
+        <result property="llmCallCount" column="llm_call_count"/>
+        <result property="toolCallCount" column="tool_call_count"/>
+        <result property="rawOutput" column="raw_output"/>
+        <result property="errorMessage" column="error_message"/>
+        <result property="createdAt" column="created_at"
+                typeHandler="com.library.agent.handler.TimestamptzLocalDateTimeTypeHandler"/>
+    </resultMap>
+
+    <sql id="insertColumns">
+        run_id,
+        case_id,
+        category,
+        difficulty,
+        query,
+        trace_id,
+        task_success,
+        success_reason,
+        quality_scores,
+        quality_total,
+        tool_selection,
+        param_result,
+        retrieval_result,
+        judge_reason,
+        human_scores,
+        human_checked,
+        total_input_tokens,
+        total_output_tokens,
+        total_tokens,
+        duration_ms,
+        llm_call_count,
+        tool_call_count,
+        raw_output,
+        error_message,
+        created_at
+    </sql>
+
+    <insert id="insert"
+            parameterType="com.library.agent.entity.EvalCaseResult"
+            useGeneratedKeys="true"
+            keyProperty="id">
+        INSERT INTO agent_eval_case_result
+        (<include refid="insertColumns"/>)
+        VALUES
+        (
+            #{runId},
+            #{caseId},
+            #{category},
+            #{difficulty},
+            #{query},
+            #{traceId},
+            #{taskSuccess},
+            #{successReason},
+            #{qualityScores, jdbcType=OTHER, typeHandler=com.library.agent.handler.JsonbTypeHandler},
+            #{qualityTotal},
+            #{toolSelection, jdbcType=OTHER, typeHandler=com.library.agent.handler.JsonbTypeHandler},
+            #{paramResult, jdbcType=OTHER, typeHandler=com.library.agent.handler.JsonbTypeHandler},
+            #{retrievalResult, jdbcType=OTHER, typeHandler=com.library.agent.handler.JsonbTypeHandler},
+            #{judgeReason},
+            #{humanScores, jdbcType=OTHER, typeHandler=com.library.agent.handler.JsonbTypeHandler},
+            COALESCE(#{humanChecked}, FALSE),
+            #{totalInputTokens},
+            #{totalOutputTokens},
+            #{totalTokens},
+            #{durationMs},
+            #{llmCallCount},
+            #{toolCallCount},
+            #{rawOutput},
+            #{errorMessage},
+            COALESCE(#{createdAt}, CURRENT_TIMESTAMP)
+        )
+    </insert>
+
+    <insert id="insertBatch" parameterType="java.util.List">
+        INSERT INTO agent_eval_case_result
+        (<include refid="insertColumns"/>)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (
+                #{item.runId},
+                #{item.caseId},
+                #{item.category},
+                #{item.difficulty},
+                #{item.query},
+                #{item.traceId},
+                #{item.taskSuccess},
+                #{item.successReason},
+                #{item.qualityScores, jdbcType=OTHER, typeHandler=com.library.agent.handler.JsonbTypeHandler},
+                #{item.qualityTotal},
+                #{item.toolSelection, jdbcType=OTHER, typeHandler=com.library.agent.handler.JsonbTypeHandler},
+                #{item.paramResult, jdbcType=OTHER, typeHandler=com.library.agent.handler.JsonbTypeHandler},
+                #{item.retrievalResult, jdbcType=OTHER, typeHandler=com.library.agent.handler.JsonbTypeHandler},
+                #{item.judgeReason},
+                #{item.humanScores, jdbcType=OTHER, typeHandler=com.library.agent.handler.JsonbTypeHandler},
+                COALESCE(#{item.humanChecked}, FALSE),
+                #{item.totalInputTokens},
+                #{item.totalOutputTokens},
+                #{item.totalTokens},
+                #{item.durationMs},
+                #{item.llmCallCount},
+                #{item.toolCallCount},
+                #{item.rawOutput},
+                #{item.errorMessage},
+                COALESCE(#{item.createdAt}, CURRENT_TIMESTAMP)
+            )
+        </foreach>
+    </insert>
+
+    <select id="selectByRunId" resultMap="EvalCaseResultResultMap">
+        SELECT *
+        FROM agent_eval_case_result
+        WHERE run_id = #{runId}
+        ORDER BY id ASC
+    </select>
+
+</mapper>
