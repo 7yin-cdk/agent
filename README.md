@@ -109,6 +109,8 @@ agent-ui/
 1. **初始化数据库**：在 `rag_db` 中执行建表语句：
    - `src/main/resources/db/health_check_record.sql`
    - `src/main/resources/db/agent_long_term_memory.sql`（长期记忆表 + 去重/淘汰/向量 HNSW 索引，依赖 pgvector）
+   - `src/main/resources/db/agent_eval.sql`（评测表）
+   - `src/main/resources/db/rag_chunk_metadata.sql`（`text_chunk` 来源元数据列：`source_title` / `source_url` / `section_path`）
    - `sql/index.sql`（向量 HNSW 索引）
 
 2. **配置**：复制 `src/main/resources/application-example.yaml` 为 `application.yaml`，填入实际的数据库、Redis、Elasticsearch、MinIO、RocketMQ 与百炼 API Key 等配置。

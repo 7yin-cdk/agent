@@ -117,8 +117,11 @@ public class ReactiveStreamingService {
         QueryRewriteResult rewriteResult =
                 rewriteQueryIfNeeded(query, intentType, summary, historyMessages);
 
-        /* 4. 发送 meta + status 事件 */
-        sendEvent(emitter, "meta", Map.of("conversationId", conversationId));
+        /* 4. 发送 meta + status 事件；meta 携带 traceId 供评测侧关联可观测数据 */
+        sendEvent(emitter, "meta", Map.of(
+                "conversationId", conversationId,
+                "traceId", collector.getTraceId()
+        ));
         sendEvent(emitter, "status", Map.of(
                 "conversationId", conversationId,
                 "intentType", intentType.name(),

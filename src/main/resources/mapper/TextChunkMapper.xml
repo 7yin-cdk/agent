@@ -14,6 +14,9 @@
         chunk_length,
         start_offset,
         end_offset,
+        source_title,
+        source_url,
+        section_path,
         status,
         created_at,
         updated_at
@@ -28,6 +31,9 @@
             #{item.chunkLength},
             #{item.startOffset},
             #{item.endOffset},
+            #{item.sourceTitle},
+            #{item.sourceUrl},
+            #{item.sectionPath},
             #{item.status},
             #{item.createdAt},
             #{item.updatedAt}
@@ -43,6 +49,8 @@
         c.chunk_index,
         c.chunk_text,
         c.chunk_length,
+        c.section_path,
+        c.source_url,
         c.created_at
         FROM text_chunk c
         JOIN file_metadata f ON f.id = c.file_id
@@ -63,6 +71,8 @@
         c.chunk_index,
         c.chunk_text,
         c.chunk_length,
+        c.section_path,
+        c.source_url,
         c.created_at
         FROM text_chunk c
         LEFT JOIN file_metadata f ON f.id = c.file_id
@@ -89,6 +99,9 @@
         c.chunk_length,
         c.start_offset,
         c.end_offset,
+        c.source_title,
+        c.source_url,
+        c.section_path,
         c.status,
         c.created_at,
         c.updated_at

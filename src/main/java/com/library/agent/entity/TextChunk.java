@@ -30,6 +30,15 @@ public class TextChunk {
     /** 原文结束位置 */
     private Integer endOffset;
 
+    /** 来源文档标题，取自 markdown frontmatter，非 markdown 文件为 null */
+    private String sourceTitle;
+
+    /** 来源地址，取自 markdown frontmatter 的 source_url，非 markdown 文件为 null */
+    private String sourceUrl;
+
+    /** 小节路径，形如 "VACUUM > Synopsis"，非 markdown 文件为 null */
+    private String sectionPath;
+
     /** 状态 INIT / EMBEDDED */
     private String status;
 

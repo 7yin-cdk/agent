@@ -14,6 +14,15 @@ import java.util.List;
 @RequiredArgsConstructor
 public class KeywordSearchService {
 
+    /**
+     * BEIR SciFact 评测语料的 file_id 前缀。
+     * <p>
+     * 评测文档由 {@code BeirScifactImportService.toEvalFileId} 生成为 -(docId+1) 的负数，
+     * 真实 KB 文档的 file_id 来自 file_metadata.id 恒为正，故以 "-" 前缀区分。
+     * 评测语料与 KB 文档共用同一索引，不过滤会挤占 KB 关键词召回的 topK 候选位。
+     */
+    private static final String EVAL_FILE_ID_PREFIX = "-";
+
     private final RagChunkSearchRepository repository;
     private final ElasticsearchOperations elasticsearchOperations;
 
@@ -32,7 +41,9 @@ public class KeywordSearchService {
 
     public List<Long> searchChunkIds(String queryText, int topK) {
         NativeQuery query = NativeQuery.builder()
-                .withQuery(q -> q.match(m -> m.field("chunkText").query(queryText)))
+                .withQuery(q -> q.bool(b -> b
+                        .must(m -> m.match(mm -> mm.field("chunkText").query(queryText)))
+                        .mustNot(n -> n.prefix(p -> p.field("fileId").value(EVAL_FILE_ID_PREFIX)))))
                 .withPageable(PageRequest.of(0, topK))
                 .build();
 

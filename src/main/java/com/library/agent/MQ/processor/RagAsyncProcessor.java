@@ -10,7 +10,10 @@ import com.library.agent.llm.LlmService;
 import com.library.agent.mapper.FileMetadataMapper;
 import com.library.agent.mapper.TextChunkMapper;
 import com.library.agent.mapper.TextChunkVectorMapper;
+import com.library.agent.rag.dto.ChunkDraft;
+import com.library.agent.rag.dto.ParsedDocument;
 import com.library.agent.rag.service.DocumentParser;
+import com.library.agent.rag.service.MarkdownChunker;
 import io.minio.GetObjectArgs;
 import io.minio.MinioClient;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +48,7 @@ public class RagAsyncProcessor {
     private final FileMetadataMapper fileMetadataMapper;
     private final MinioClient minioClient;
     private final DocumentParser documentParser;
+    private final MarkdownChunker markdownChunker;
     private final LlmService llmService;
 
     public void process(RagIngestMessage message) {
@@ -58,23 +62,40 @@ public class RagAsyncProcessor {
                         .object(objectName)
                         .build()
         )) {
-            /* 1. 解析文档为纯文本 */
-            String text = documentParser.parse(inputStream);
+            /* 1. 解析文档：markdown 保留空行与缩进，其余格式沿用 Tika 压平清洗 */
+            ParsedDocument document = documentParser.parse(inputStream, message.getFileName());
 
-            /* 2. 分块 */
-            List<String> chunks = splitText(text);
+            /* 2. 分块：markdown 按标题层级切分，其余沿用标点递归切分 */
+            List<ChunkDraft> chunks = toChunks(document);
 
             /* 3. 分片文本向量化 */
-            List<List<Float>> embed = llmService.embed(chunks);
+            List<List<Float>> embed = llmService.embed(chunks.stream().map(ChunkDraft::getText).toList());
 
             /* 4. 分片和分片向量化结果入库，成功后回写文件状态 */
-            saveChunks(fileId, chunks, embed);
+            saveChunks(fileId, chunks, embed, document);
             fileMetadataMapper.updateStatus(fileId, "EMBEDDED");
         } catch (Exception e) {
             /* 记录失败并回写 FAILED，供前端展示（不再抛出以避免无限重试） */
             log.error("RAG 入库失败 fileId={}", fileId, e);
             fileMetadataMapper.updateStatus(fileId, "FAILED");
         }
+    }
+
+    /**
+     * 按文档类型选择分块策略。
+     */
+    private List<ChunkDraft> toChunks(ParsedDocument document) {
+        if (document.isMarkdown()) {
+            return markdownChunker.chunk(document.getText(), document.getSourceTitle());
+        }
+        /* 非 markdown 没有小节概念，偏移量按块长累加，保持原有语义 */
+        List<ChunkDraft> drafts = new ArrayList<>();
+        int offset = 0;
+        for (String chunk : splitText(document.getText())) {
+            drafts.add(new ChunkDraft(chunk, null, offset, offset + chunk.length()));
+            offset += chunk.length();
+        }
+        return drafts;
     }
 
     /**
@@ -244,23 +265,24 @@ public class RagAsyncProcessor {
 
     /**
      * 将分块文本和分块文本向量化结果入库
-     * @param fileId 分块所属文件名
-     * @param chunks 分块文本
+     * @param fileId 分块所属文件 ID
+     * @param chunks 分块内容，markdown 分块自带小节路径
      * @param embeddings 分块向量化结果
-     * @return
+     * @param document 文档解析结果，提供来源标题与来源地址
+     * @return 分块 ID 列表
      */
     @Transactional
-    public List<Long> saveChunks(Long fileId, List<String> chunks, List<List<Float>> embeddings) {
+    public List<Long> saveChunks(Long fileId, List<ChunkDraft> chunks, List<List<Float>> embeddings,
+                                 ParsedDocument document) {
 
         List<TextChunk> entities = new ArrayList<>();
         List<TextChunkVector> vectorEntities = new ArrayList<>();
         List<Long> chunkIds = new ArrayList<>();
 
-        int offset = 0;
         Snowflake snowflake = IdUtil.getSnowflake(1, 1);
 
         for (int i = 0; i < chunks.size(); i++) {
-            String chunk = chunks.get(i);
+            ChunkDraft draft = chunks.get(i);
             List<Float> embeddingList = embeddings.get(i);
 
             Long id = snowflake.nextId();
@@ -271,10 +293,13 @@ public class RagAsyncProcessor {
             entity.setChunkId(id);
             entity.setFileId(fileId);
             entity.setChunkIndex(i);
-            entity.setChunkText(chunk);
-            entity.setChunkLength(chunk.length());
-            entity.setStartOffset(offset);
-            entity.setEndOffset(offset + chunk.length());
+            entity.setChunkText(draft.getText());
+            entity.setChunkLength(draft.getText().length());
+            entity.setStartOffset(draft.getStartOffset());
+            entity.setEndOffset(draft.getEndOffset());
+            entity.setSourceTitle(document.getSourceTitle());
+            entity.setSourceUrl(document.getSourceUrl());
+            entity.setSectionPath(draft.getSectionPath());
             entity.setStatus("INIT");
             entity.setCreatedAt(LocalDateTime.now());
             entity.setUpdatedAt(LocalDateTime.now());
@@ -295,8 +320,6 @@ public class RagAsyncProcessor {
 
             vectorEntity.setCreatedAt(LocalDateTime.now());
             vectorEntities.add(vectorEntity);
-
-            offset += chunk.length();
         }
 
         // 批量入库

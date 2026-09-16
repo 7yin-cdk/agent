@@ -16,6 +16,13 @@ public class RetrievedChunk {
     private Long chunkId;
     private Integer chunkIndex;
     private String chunkText;
+
+    /** 小节路径，形如 "VACUUM > Synopsis"，仅 markdown 文档有值 */
+    private String sectionPath;
+
+    /** 来源地址，仅 markdown 文档有值 */
+    private String sourceUrl;
+
     private Double score;
     private Integer rank;
 }

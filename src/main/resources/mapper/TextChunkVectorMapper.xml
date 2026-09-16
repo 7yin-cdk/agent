@@ -21,15 +21,21 @@
     </insert>
 
     <select id="selectTopKChunkIds" resultType="java.lang.Long">
+        /* file_id > 0 排除 BEIR SciFact 评测语料：其 file_id 由 BeirScifactImportService.toEvalFileId
+           生成为 -(docId+1) 的负数，与真实 KB 文档（file_metadata.id 为正）区分。
+           评测向量与 KB 文档共居同一张表，不过滤会挤占 KB 召回的 topK 候选位。 */
         SELECT chunk_id
         FROM text_chunk_vector
+        WHERE file_id > 0
         ORDER BY embedding <![CDATA[<=>]]> #{embedding, typeHandler=com.library.agent.handler.FloatArrayTypeHandler}
         LIMIT #{topK}
     </select>
 
     <select id="selectTopKWithDistance" resultType="com.library.agent.rag.dto.ChunkSimilarity">
+        /* file_id > 0 的过滤理由同 selectTopKChunkIds */
         SELECT chunk_id, embedding <![CDATA[<=>]]> #{embedding, typeHandler=com.library.agent.handler.FloatArrayTypeHandler} AS distance
         FROM text_chunk_vector
+        WHERE file_id > 0
         ORDER BY distance
         LIMIT #{topK}
     </select>

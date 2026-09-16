@@ -16,5 +16,12 @@ public class ChunkView {
     private Integer chunkIndex;
     private String chunkText;
     private Integer chunkLength;
+
+    /** 小节路径，形如 "VACUUM > Synopsis"，仅 markdown 文档有值 */
+    private String sectionPath;
+
+    /** 来源地址，仅 markdown 文档有值 */
+    private String sourceUrl;
+
     private LocalDateTime createdAt;
 }

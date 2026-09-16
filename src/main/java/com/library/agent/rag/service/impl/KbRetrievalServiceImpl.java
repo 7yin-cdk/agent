@@ -86,6 +86,8 @@ public class KbRetrievalServiceImpl implements KbRetrievalService {
             hit.setChunkId(r.getChunkId());
             hit.setChunkIndex(r.getChunkIndex());
             hit.setChunkText(r.getChunkText());
+            hit.setSectionPath(r.getSectionPath());
+            hit.setSourceUrl(r.getSourceUrl());
             hit.setScore(scoreByChunk.get(r.getChunkId()));
             hit.setRank(i + 1);
             result.add(hit);

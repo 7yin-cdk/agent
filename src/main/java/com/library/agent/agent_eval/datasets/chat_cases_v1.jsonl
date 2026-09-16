@@ -1,0 +1,80 @@
+{"case_id":"chat_001","category":"知识问答","difficulty":"EASY","query":"什么是数据库的缓冲池命中率？","key_points":[],"notes":""}
+{"case_id":"chat_002","category":"知识问答","difficulty":"EASY","query":"pg_stat_statements 是做什么用的？","key_points":[],"notes":""}
+{"case_id":"chat_003","category":"知识问答","difficulty":"EASY","query":"慢查询的常见原因有哪些？","key_points":[],"notes":""}
+{"case_id":"chat_004","category":"知识问答","difficulty":"EASY","query":"什么是死元组（dead tuple）？","key_points":[],"notes":""}
+{"case_id":"chat_005","category":"知识问答","difficulty":"EASY","query":"PostgreSQL 的 VACUUM 有什么作用？","key_points":[],"notes":""}
+{"case_id":"chat_006","category":"知识问答","difficulty":"EASY","query":"什么是主从复制延迟？","key_points":[],"notes":""}
+{"case_id":"chat_007","category":"知识问答","difficulty":"EASY","query":"如何理解 EXPLAIN 中的全表扫描（Seq Scan）？","key_points":[],"notes":""}
+{"case_id":"chat_008","category":"知识问答","difficulty":"EASY","query":"数据库连接池的作用是什么？","key_points":[],"notes":""}
+{"case_id":"chat_009","category":"知识问答","difficulty":"EASY","query":"什么是事务空闲（idle in transaction）？","key_points":[],"notes":""}
+{"case_id":"chat_010","category":"知识问答","difficulty":"EASY","query":"HNSW 索引适合什么场景？","key_points":[],"notes":""}
+{"case_id":"chat_011","category":"知识问答","difficulty":"EASY","query":"缓存命中率低会带来什么影响？","key_points":[],"notes":""}
+{"case_id":"chat_012","category":"知识问答","difficulty":"EASY","query":"索引失效的常见情况有哪些？","key_points":[],"notes":""}
+{"case_id":"chat_013","category":"知识问答","difficulty":"MEDIUM","query":"缓冲池命中率低于多少算异常？应该怎么优化？","key_points":[],"notes":""}
+{"case_id":"chat_014","category":"知识问答","difficulty":"MEDIUM","query":"pg_stat_statements 的统计信息会不会被重置？什么情况下会被重置？","key_points":[],"notes":""}
+{"case_id":"chat_015","category":"知识问答","difficulty":"MEDIUM","query":"死元组比例过高会带来哪些影响，应该如何处理？","key_points":[],"notes":""}
+{"case_id":"chat_016","category":"知识问答","difficulty":"MEDIUM","query":"主从复制延迟持续偏高，排查思路是什么？","key_points":[],"notes":""}
+{"case_id":"chat_017","category":"知识问答","difficulty":"MEDIUM","query":"慢查询日志和 pg_stat_statements 有什么区别，各适合什么场景？","key_points":[],"notes":""}
+{"case_id":"chat_018","category":"知识问答","difficulty":"MEDIUM","query":"执行计划中出现了 Nested Loop 但数据量很大，问题可能出在哪？","key_points":[],"notes":""}
+{"case_id":"chat_019","category":"知识问答","difficulty":"MEDIUM","query":"事务长时间处于 idle in transaction 状态的危害是什么？","key_points":[],"notes":""}
+{"case_id":"chat_020","category":"知识问答","difficulty":"MEDIUM","query":"数据库扩容时采用读写分离需要注意哪些问题？","key_points":[],"notes":""}
+{"case_id":"chat_021","category":"知识问答","difficulty":"HARD","query":"一个 OLTP 库的缓冲池命中率从 99% 降到 92%，请给出系统性的排查思路。","key_points":[],"notes":"考察分层排查与可操作性"}
+{"case_id":"chat_022","category":"知识问答","difficulty":"HARD","query":"在 pg_stat_statements 中看到某条 SQL 平均耗时不高但总耗时很高，如何定位并优化？","key_points":[],"notes":"考察调用次数与总耗时的权衡分析"}
+{"case_id":"chat_023","category":"知识问答","difficulty":"HARD","query":"主从复制延迟与写入吞吐同时升高，可能的原因链有哪些？","key_points":[],"notes":""}
+{"case_id":"chat_024","category":"知识问答","difficulty":"HARD","query":"如何设计一个针对 PostgreSQL 的容量规划方案？需要考虑哪些指标？","key_points":[],"notes":""}
+{"case_id":"chat_025","category":"性能诊断","difficulty":"EASY","query":"帮我看看 rag 库的健康指标","key_points":[],"notes":"应调健康检查工具"}
+{"case_id":"chat_026","category":"性能诊断","difficulty":"EASY","query":"采集一下 localhost:5432 上 rag_db 的性能指标","key_points":[],"notes":"应调指标采集工具，instance 为 localhost:5432"}
+{"case_id":"chat_027","category":"性能诊断","difficulty":"EASY","query":"查一下 rag 库的慢查询","key_points":[],"notes":"应调慢查询工具"}
+{"case_id":"chat_028","category":"性能诊断","difficulty":"EASY","query":"看看 192.168.1.100:5432 上 rag_db 的 Top 10 慢查询","key_points":[],"notes":"应调慢查询工具，instance 为 192.168.1.100:5432"}
+{"case_id":"chat_029","category":"性能诊断","difficulty":"EASY","query":"给我 rag 库的健康检查结果","key_points":[],"notes":""}
+{"case_id":"chat_030","category":"性能诊断","difficulty":"EASY","query":"采集 localhost:5432 上 rag_db 的八项核心性能指标","key_points":[],"notes":""}
+{"case_id":"chat_031","category":"性能诊断","difficulty":"EASY","query":"查一下 localhost 端口 5432 上 rag_db 的慢查询排名","key_points":[],"notes":""}
+{"case_id":"chat_032","category":"性能诊断","difficulty":"EASY","query":"帮我做一次 rag 库的巡检","key_points":[],"notes":"应调健康检查工具"}
+{"case_id":"chat_033","category":"性能诊断","difficulty":"MEDIUM","query":"先看下 rag 库的健康指标，再给我慢查询的 Top 10","key_points":[],"notes":"多工具串行"}
+{"case_id":"chat_034","category":"性能诊断","difficulty":"MEDIUM","query":"用估算模式分析这条 SQL 的执行计划：select * from text_chunk where file_id = 1。实例是 localhost:5432，库是 rag_db","key_points":[],"notes":"执行计划工具，mode=estimated"}
+{"case_id":"chat_035","category":"性能诊断","difficulty":"MEDIUM","query":"查一下 rag 库的慢查询和性能指标，看看有没有明显问题","key_points":[],"notes":""}
+{"case_id":"chat_036","category":"性能诊断","difficulty":"MEDIUM","query":"给 localhost:5432 上的 rag_db 做一次完整体检：健康指标、慢查询、性能指标","key_points":[],"notes":"三工具组合"}
+{"case_id":"chat_037","category":"性能诊断","difficulty":"MEDIUM","query":"我想知道 rag 库最近哪些 SQL 最慢，顺便看看缓冲池命中率","key_points":[],"notes":""}
+{"case_id":"chat_038","category":"性能诊断","difficulty":"MEDIUM","query":"用估算模式分析这条 SQL 的执行计划：select count(*) from text_chunk_vector。实例 localhost:5432，库 rag_db","key_points":[],"notes":""}
+{"case_id":"chat_039","category":"性能诊断","difficulty":"MEDIUM","query":"采集 rag_db 的性能指标并告诉我有没有异常","key_points":[],"notes":""}
+{"case_id":"chat_040","category":"性能诊断","difficulty":"MEDIUM","query":"看看 rag 库的慢查询，如果发现问题再帮我分析执行计划","key_points":[],"notes":"条件分支"}
+{"case_id":"chat_041","category":"性能诊断","difficulty":"HARD","query":"诊断一下 rag 库：先采集健康指标和性能指标，再查慢查询，如果发现异常就发告警邮件","key_points":[],"notes":"多工具 + 条件告警，含 WRITE 工具"}
+{"case_id":"chat_042","category":"性能诊断","difficulty":"HARD","query":"帮我对比 rag 库的健康指标和慢查询情况，判断是否存在性能瓶颈并给出优化建议","key_points":[],"notes":"需综合分析并给出结论"}
+{"case_id":"chat_043","category":"性能诊断","difficulty":"HARD","query":"我们怀疑 rag 库有性能问题，请你完整诊断：健康指标、八项性能指标、Top 10 慢查询，最后给出结论","key_points":[],"notes":""}
+{"case_id":"chat_044","category":"性能诊断","difficulty":"HARD","query":"rag 库现在响应变慢，帮我系统性排查：先看健康指标和性能指标，再定位慢查询，必要时分析执行计划","key_points":[],"notes":"ReAct 多步推理"}
+{"case_id":"chat_045","category":"告警通知","difficulty":"EASY","query":"给 rag 库发一封告警邮件，主题是测试告警，内容是磁盘使用率超过阈值","key_points":[],"notes":"WRITE 工具，评测环境需隔离收件人"}
+{"case_id":"chat_046","category":"告警通知","difficulty":"EASY","query":"帮我给 rag 库的告警联系人发邮件，说明缓冲池命中率异常","key_points":[],"notes":""}
+{"case_id":"chat_047","category":"告警通知","difficulty":"MEDIUM","query":"如果 rag 库的健康指标异常，就发一封告警邮件给配置的联系人","key_points":[],"notes":"条件触发"}
+{"case_id":"chat_048","category":"告警通知","difficulty":"MEDIUM","query":"帮我给 rag 库发告警邮件，主题是慢查询告警，内容包含当前慢查询数量和优化建议","key_points":[],"notes":""}
+{"case_id":"chat_049","category":"告警通知","difficulty":"MEDIUM","query":"巡检 rag 库，如果发现异常指标就发邮件告警，主题写明是哪个指标异常","key_points":[],"notes":""}
+{"case_id":"chat_050","category":"告警通知","difficulty":"MEDIUM","query":"rag 库死元组比例超过 10%，发邮件告警说明当前值和处理建议","key_points":[],"notes":""}
+{"case_id":"chat_051","category":"告警通知","difficulty":"HARD","query":"先诊断 rag 库的健康指标，如果缓冲池命中率低于 95% 就发告警邮件，邮件里要包含当前值、阈值和优化建议","key_points":[],"notes":"先诊断后按阈值决策"}
+{"case_id":"chat_052","category":"告警通知","difficulty":"HARD","query":"帮我做一次 rag 库巡检并邮件通知结果：全部正常就发一封巡检正常的邮件，有异常就把异常指标列出来","key_points":[],"notes":"条件分支 + 邮件"}
+{"case_id":"chat_053","category":"越界闲聊","difficulty":"EASY","query":"你好","key_points":[],"notes":"不应调用任何工具"}
+{"case_id":"chat_054","category":"越界闲聊","difficulty":"EASY","query":"你是谁？","key_points":[],"notes":"不应调用任何工具"}
+{"case_id":"chat_055","category":"越界闲聊","difficulty":"EASY","query":"今天天气怎么样？","key_points":[],"notes":"天气工具存在，允许调用，也可澄清城市"}
+{"case_id":"chat_056","category":"越界闲聊","difficulty":"EASY","query":"谢谢","key_points":[],"notes":""}
+{"case_id":"chat_057","category":"越界闲聊","difficulty":"EASY","query":"你能做什么？","key_points":[],"notes":""}
+{"case_id":"chat_058","category":"越界闲聊","difficulty":"EASY","query":"帮我写一首关于数据库的诗","key_points":[],"notes":""}
+{"case_id":"chat_059","category":"越界闲聊","difficulty":"EASY","query":"1 加 1 等于几？","key_points":[],"notes":""}
+{"case_id":"chat_060","category":"越界闲聊","difficulty":"EASY","query":"讲个笑话吧","key_points":[],"notes":""}
+{"case_id":"chat_061","category":"越界闲聊","difficulty":"MEDIUM","query":"帮我订一张去北京的机票","key_points":[],"notes":"超出能力边界，应礼貌拒绝并说明能力范围"}
+{"case_id":"chat_062","category":"越界闲聊","difficulty":"MEDIUM","query":"帮我写一段 Python 代码实现快速排序","key_points":[],"notes":"超出职责范围，应引导回数据库运维"}
+{"case_id":"chat_063","category":"越界闲聊","difficulty":"MEDIUM","query":"你觉得哪个数据库最好用？","key_points":[],"notes":""}
+{"case_id":"chat_064","category":"越界闲聊","difficulty":"MEDIUM","query":"帮我分析一下这段 Java 代码的性能问题","key_points":[],"notes":"无代码内容，应澄清或说明范围"}
+{"case_id":"chat_065","category":"多轮指代","difficulty":"MEDIUM","query":"刚才那个库里缓冲池命中率是多少？","key_points":[],"history":["帮我查一下 localhost:5432 上 rag_db 的慢查询"],"notes":"需从上文解析实例与库名"}
+{"case_id":"chat_066","category":"多轮指代","difficulty":"MEDIUM","query":"那慢查询呢？","key_points":[],"history":["rag 库的健康指标帮我看看"],"notes":"需从上文解析实例"}
+{"case_id":"chat_067","category":"多轮指代","difficulty":"MEDIUM","query":"再帮我看看同一个实例的慢查询","key_points":[],"history":["采集一下 192.168.1.100:5432 的性能指标"],"notes":""}
+{"case_id":"chat_068","category":"多轮指代","difficulty":"MEDIUM","query":"用实际执行模式再来一次","key_points":[],"history":["分析下这条 SQL 的执行计划：select * from text_chunk"],"notes":"需从上文解析 SQL 与实例，mode=actual"}
+{"case_id":"chat_069","category":"多轮指代","difficulty":"HARD","query":"既然都正常，那帮我出个体检报告并邮件通知","key_points":[],"history":["rag 库的健康指标","看起来都正常"],"notes":"多轮 + WRITE 工具"}
+{"case_id":"chat_070","category":"多轮指代","difficulty":"HARD","query":"第二慢的那条，帮我分析一下执行计划","key_points":[],"history":["localhost:5432 上 rag_db 的慢查询"],"notes":"需从上一轮工具结果中取第二条 SQL"}
+{"case_id":"chat_071","category":"多轮指代","difficulty":"HARD","query":"如果缓冲池命中率低于 95%，就按之前的流程发告警邮件","key_points":[],"history":["先看下 rag 库的指标"],"notes":"指代历史中的阈值与流程"}
+{"case_id":"chat_072","category":"多轮指代","difficulty":"HARD","query":"那查一下慢查询，看看是不是有慢 SQL 拖累了","key_points":[],"history":["帮我采集 rag_db 的性能指标","缓冲池命中率有点低"],"notes":"承接上文的因果假设"}
+{"case_id":"chat_073","category":"模糊提问","difficulty":"MEDIUM","query":"数据库有点慢","key_points":[],"notes":"信息不足，应追问实例/库或给出排查方向"}
+{"case_id":"chat_074","category":"模糊提问","difficulty":"MEDIUM","query":"帮我看看有没有问题","key_points":[],"notes":"信息不足，应追问对象"}
+{"case_id":"chat_075","category":"模糊提问","difficulty":"MEDIUM","query":"系统卡了","key_points":[],"notes":"信息不足，应追问"}
+{"case_id":"chat_076","category":"模糊提问","difficulty":"MEDIUM","query":"帮我优化一下数据库","key_points":[],"notes":"范围过大，应追问目标与实例"}
+{"case_id":"chat_077","category":"模糊提问","difficulty":"HARD","query":"感觉不太对劲，你看着办","key_points":[],"notes":"考察主动澄清能力，不应盲目执行写操作"}
+{"case_id":"chat_078","category":"模糊提问","difficulty":"HARD","query":"帮我把数据库弄快点","key_points":[],"notes":"考察澄清与安全边界"}
+{"case_id":"chat_079","category":"模糊提问","difficulty":"HARD","query":"性能有问题，你判断一下","key_points":[],"notes":"信息不足，应追问或给出受限的排查方案"}
+{"case_id":"chat_080","category":"模糊提问","difficulty":"HARD","query":"rag 库好像有问题，具体我也说不清","key_points":[],"notes":"应主动发起诊断并说明假设"}

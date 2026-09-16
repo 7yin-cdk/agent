@@ -197,9 +197,11 @@ const snippet = (s, n = 180) => (s ? (s.length > n ? `${s.slice(0, n)}…` : s) 
             <span class="rank mono">#{{ i + 1 }}</span>
             <span class="file-name mono truncate">{{ r.fileName }}</span>
             <span class="badge badge-info">切片 {{ r.chunkIndex }}</span>
+            <span v-if="r.sectionPath" class="badge badge-neutral truncate">{{ r.sectionPath }}</span>
             <span v-if="r.score != null" class="badge badge-success">相似度 {{ Number(r.score).toFixed(4) }}</span>
           </div>
           <div class="hit-text">{{ snippet(r.chunkText) }}</div>
+          <a v-if="r.sourceUrl" class="small" :href="r.sourceUrl" target="_blank" rel="noopener">来源文档</a>
         </div>
         <EmptyState v-if="!results.length" text="未命中任何片段" />
       </div>
@@ -219,13 +221,17 @@ const snippet = (s, n = 180) => (s ? (s.length > n ? `${s.slice(0, n)}…` : s) 
           <button class="btn btn-ghost btn-sm" @click="chunks = null">关闭</button>
         </div>
         <div class="drawer-body">
-          <div class="small muted mb-2">共 {{ chunks.total }} 个切片（文本分块，400 字/块 + overlap）</div>
+          <div class="small muted mb-2">共 {{ chunks.total }} 个切片（markdown 标题感知切分，目标 800 字/块 + 重叠）</div>
           <div v-for="(c, i) in chunks.list" :key="c.chunkId" class="chunk">
             <div class="chunk-head">
-              <span class="mono small">[{{ c.chunkIndex }}]</span>
+              <div class="chunk-head-left">
+                <span class="mono small">[{{ c.chunkIndex }}]</span>
+                <span v-if="c.sectionPath" class="badge badge-neutral small truncate">{{ c.sectionPath }}</span>
+              </div>
               <span class="muted small">{{ c.chunkText?.length }} 字</span>
             </div>
             <div class="chunk-text">{{ c.chunkText }}</div>
+            <a v-if="c.sourceUrl" class="small" :href="c.sourceUrl" target="_blank" rel="noopener">来源文档</a>
           </div>
           <EmptyState v-if="!chunks.list.length" text="该文档暂无切片" />
         </div>
@@ -261,6 +267,7 @@ const snippet = (s, n = 180) => (s ? (s.length > n ? `${s.slice(0, n)}…` : s) 
 .results { display: flex; flex-direction: column; gap: 10px; }
 .hit { padding: 12px 14px; }
 .hit-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
+.hit-head .badge { max-width: 360px; }
 .rank { color: var(--primary); font-weight: 600; }
 .file-name { max-width: 300px; font-weight: 500; }
 .hit-text { font-size: 13px; line-height: 1.6; color: var(--text-secondary); word-break: break-word; }
@@ -272,6 +279,8 @@ const snippet = (s, n = 180) => (s ? (s.length > n ? `${s.slice(0, n)}…` : s) 
 .drawer-head h3 { margin-top: 4px; }
 .drawer-body { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
 .chunk { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; background: #fafbfc; }
-.chunk-head { display: flex; justify-content: space-between; margin-bottom: 4px; }
+.chunk-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.chunk-head-left { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.chunk-head-left .badge { max-width: 320px; }
 .chunk-text { font-size: 12.5px; line-height: 1.6; color: var(--text-secondary); max-height: 200px; overflow: auto; white-space: pre-wrap; }
 </style>

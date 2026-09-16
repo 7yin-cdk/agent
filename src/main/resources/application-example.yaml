@@ -71,6 +71,10 @@ rocketmq:
 agent:
   tool:
     timeout-seconds: 30
+  eval:
+    judge-model: qwen-max            # 评测 Judge 专用模型(与主对话模型解耦)，需账号具备该模型权限
+    judge-timeout-seconds: 120       # Judge 单次调用超时秒数
+    default-suite: CHAT              # 默认测评套件；CHAT 整体 / TOOL 工具调用 / RAG 检索
   llm:
     retry-attempts: 2               # 对话/生成类 LLM 每个 provider 内的额外重试次数(不含首次)
     retry-backoff-ms: 500           # 重试线性退避基准毫秒
