@@ -3,6 +3,7 @@ package com.library.agent.service;
 import com.library.agent.auth.context.UserContext;
 import com.library.agent.auth.context.UserContextHolder;
 import com.library.agent.context.AgentChatContext;
+import com.library.agent.conversation.service.ConversationService;
 import com.library.agent.entity.AgentShortTermMemory;
 import com.library.agent.enums.IntentType;
 import com.library.agent.llm.LlmService;
@@ -47,6 +48,7 @@ public class ReactiveStreamingService {
 
     private final LlmService llmService;
     private final RagService ragService;
+    private final ConversationService conversationService;
     private final ShortTermMemoryService shortTermMemoryService;
     private final ConversationSummaryService conversationSummaryService;
     private final ToolCallingService toolCallingService;
@@ -142,12 +144,14 @@ public class ReactiveStreamingService {
             sendEvent(emitter, "delta", Map.of("content", token));
         });
 
-        /* 7. 保存消息 + 回答后触发长期记忆抽取（记住命令同步，常规异步，fail-open） */
+        /* 7. 保存消息 + 刷新会话活跃度 + 回答后触发长期记忆抽取（记住命令同步，常规异步，fail-open） */
         shortTermMemoryService.saveUserAndAssistantMessages(
                 userId, conversationId, query, fullAnswer.toString(),
                 Map.of("intentType", intentType.name()),
                 Map.of("intentType", intentType.name()));
+        conversationService.touchConversation(userId, conversationId, 2);
         longTermMemoryService.postTurn(userId, conversationId, query, fullAnswer.toString(), historyMessages, null);
+        conversationSummaryService.triggerSummaryIfNeeded(userId, conversationId);
 
         /* 8. 保存可观测数据 */
         traceService.save(collector, "SUCCESS", null);
@@ -162,13 +166,13 @@ public class ReactiveStreamingService {
     /**
      * 按意图类型路由到流式或非流式执行路径。
      * <p>
-     * SIMPLE_CHAT 与 KNOWLEDGE_BASE 走 LLM token-level 流式输出；
+     * KNOWLEDGE_BASE 走 RAG + LLM token-level 流式输出；
      * COMPLEX_TASK 走 ReAct 阻塞调用，拿到完整答案后分块以打字机效果输出。
      */
     private void routeStream(IntentType intentType, AgentChatContext context,
                              ConversationTraceCollector collector,
                              java.util.function.Consumer<String> onDelta) {
-        IntentType safeType = intentType == null ? IntentType.SIMPLE_CHAT : intentType;
+        IntentType safeType = intentType == null ? IntentType.COMPLEX_TASK : intentType;
 
         switch (safeType) {
             case KNOWLEDGE_BASE -> {
@@ -197,15 +201,6 @@ public class ReactiveStreamingService {
                 String answer = toolCallingService.chatWithTasks(context, taskPrompt, collector);
                 /* 分块输出，模拟打字机效果 */
                 streamChunks(answer, onDelta);
-            }
-            case SIMPLE_CHAT -> {
-                String prompt = PromptBuilder.buildSimplePrompt(
-                        context.getQuery(),
-                        context.getConversationSummary(),
-                        context.getHistoryMessages(),
-                        context.getLongTermMemories());
-                llmService.chatStream(prompt, onDelta);
-                recordLlmStreamCall(collector, "SIMPLE_CHAT", prompt);
             }
         }
     }
@@ -251,34 +246,17 @@ public class ReactiveStreamingService {
     private IntentType identifyIntent(String query, List<AgentShortTermMemory> history,
                                        ConversationTraceCollector collector) {
         if (query == null || query.trim().isEmpty()) {
-            return IntentType.SIMPLE_CHAT;
+            return IntentType.COMPLEX_TASK;
         }
-        /* 规则识别 */
-        String normalized = query.trim().toLowerCase(Locale.ROOT);
-
-        String[] explicitKeywords = {
-                "知识库", "公司知识库", "内部文档", "内部资料", "内部制度", "内部规定", "内部规则",
-                "员工手册", "公司手册", "规章制度", "人员信息", "组织架构", "报销制度", "考勤制度",
-                "请假制度", "年假规定", "薪酬制度", "福利制度", "入职流程", "离职流程", "审批流程",
-                "检索知识库"
-        };
-        for (String kw : explicitKeywords) {
-            if (normalized.contains(kw)) return IntentType.KNOWLEDGE_BASE;
+        /* 用户显式指令关键词优先 */
+        IntentType keywordIntent = IntentType.matchByKeyword(query);
+        if (keywordIntent != null) {
+            log.info("Reactive intent keyword hit: {} -> {}", query, keywordIntent);
+            return keywordIntent;
         }
-
-        String[] scopeKw = {"公司", "内部", "本公司", "我们公司", "我司", "单位", "部门", "员工",
-                "人员", "同事", "组织", "人事", "hr", "行政", "财务", "报销", "考勤", "请假",
-                "年假", "入职", "离职", "审批", "合同", "薪酬", "福利"};
-        String[] topicKw = {"制度", "规定", "规则", "手册", "文档", "文件", "资料", "信息", "流程",
-                "政策", "规范", "联系人", "负责人", "架构"};
-        boolean hasScope = false, hasTopic = false;
-        for (String kw : scopeKw) { if (normalized.contains(kw)) { hasScope = true; break; } }
-        for (String kw : topicKw) { if (normalized.contains(kw)) { hasTopic = true; break; } }
-        if (hasScope && hasTopic) return IntentType.KNOWLEDGE_BASE;
-
         /* LLM 识别 */
         try {
-            String intentPrompt = buildIntentPrompt(query, history);
+            String intentPrompt = PromptBuilder.buildIntentPrompt(query, history);
             long startMs = System.currentTimeMillis();
             String result = llmService.chat(intentPrompt);
             long duration = System.currentTimeMillis() - startMs;
@@ -295,9 +273,9 @@ public class ReactiveStreamingService {
                 if (result != null && result.toUpperCase(Locale.ROOT).contains(t.name())) return t;
             }
         } catch (Exception e) {
-            log.warn("Reactive intent LLM call failed, fallback to SIMPLE_CHAT", e);
+            log.warn("Reactive intent LLM call failed, fallback to COMPLEX_TASK", e);
         }
-        return IntentType.SIMPLE_CHAT;
+        return IntentType.COMPLEX_TASK;
     }
 
     /* ==================== 辅助方法 ==================== */
@@ -326,17 +304,6 @@ public class ReactiveStreamingService {
         if (history == null || history.isEmpty()) return List.of();
         int from = Math.max(0, history.size() - INTENT_HISTORY_LIMIT);
         return history.subList(from, history.size());
-    }
-
-    private String buildIntentPrompt(String query, List<AgentShortTermMemory> history) {
-        StringBuilder p = new StringBuilder();
-        p.append("你是一个意图识别器。请判断用户问题属于以下哪一种意图：\n");
-        p.append("1. KNOWLEDGE_BASE：只有当用户问题明确指向公司内部制度、内部流程、内部资料、员工/人员/组织信息、行政人事财务等公司内部信息时才选择。\n");
-        p.append("2. SIMPLE_CHAT：普通聊天、解释概念、闲聊，或不需要知识库和工具的问题。\n");
-        p.append("3. COMPLEX_TASK：对于需要调用工具来解决的复杂问题。\n");
-        p.append("只返回一个枚举值，不要输出任何解释。\n\n");
-        p.append("### 当前用户问题\n").append(query).append("\n");
-        return p.toString();
     }
 
     private void sendEvent(SseEmitter emitter, String eventName, Object data) {

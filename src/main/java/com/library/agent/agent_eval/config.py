@@ -4,8 +4,8 @@ BASE_URL = os.environ.get("AGENT_BASE_URL", "http://localhost:8084").rstrip("/")
 USERNAME = os.environ.get("AGENT_USERNAME", "")
 PASSWORD = os.environ.get("AGENT_PASSWORD", "")
 
-DATASET = os.environ.get("AGENT_EVAL_DATASET", "datasets/chat_cases_v1.jsonl")
-DATASET_VERSION = os.environ.get("AGENT_EVAL_DATASET_VERSION", "v1_20260914")
+DATASET = os.environ.get("AGENT_EVAL_DATASET", "datasets/chat_cases_v2.jsonl")
+DATASET_VERSION = os.environ.get("AGENT_EVAL_DATASET_VERSION", "v2_20260916")
 SUITE_NAME = os.environ.get("AGENT_EVAL_SUITE", "CHAT")
 RUN_ID = os.environ.get("AGENT_EVAL_RUN_ID", "")
 

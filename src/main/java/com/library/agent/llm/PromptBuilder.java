@@ -17,7 +17,7 @@ import java.util.Optional;
  * Prompt 构建工具类。
  * <p>
  * 该类只负责把已经准备好的会话历史、RAG 资料和用户问题拼装成 Prompt，
- * 不负责查询数据库、识别意图或调用大模型。
+ * 不负责查询数据库、判定意图或调用大模型。
  */
 public final class PromptBuilder {
 
@@ -28,64 +28,47 @@ public final class PromptBuilder {
     }
 
     /**
-     * 构建普通聊天 Prompt（非流式）。
+     * 构建意图识别 Prompt。
+     * <p>
+     * 分类口径与当前 Agent 能力对齐：知识库收录 PostgreSQL 官方运维文档，
+     * 工具覆盖实例健康检查、性能指标采集、慢查询排查、执行计划分析与告警通知。
+     * 由对话链路（ReactiveStreamingService）调用，意图单测与真实链路共用同一套口径。
      *
      * @param userQuestion 用户本轮问题
-     * @param historyMessages 当前会话历史消息
+     * @param historyMessages 用于判断指代的最近会话历史，可为空
      * @return 组装后的完整 Prompt
      */
-    public static String buildSimplePrompt(String userQuestion, List<AgentShortTermMemory> historyMessages) {
-        return buildSimplePrompt(userQuestion, null, historyMessages);
-    }
-
-    /**
-     * 构建普通聊天 Prompt （流式）
-     * @param userQuestion
-     * @param conversationSummary
-     * @param historyMessages
-     * @return
-     */
-    public static String buildSimplePrompt(
-            String userQuestion,
-            String conversationSummary,
-            List<AgentShortTermMemory> historyMessages
-    ) {
-        return buildSimplePrompt(userQuestion, conversationSummary, historyMessages, List.of());
-    }
-
-    /**
-     * 构建普通聊天 Prompt（流式，注入长期记忆）。
-     *
-     * @param userQuestion       用户本轮问题
-     * @param conversationSummary 会话摘要
-     * @param historyMessages    当前会话历史消息
-     * @param longTermMemories   回答前召回的长期记忆；空列表整段省略
-     * @return 组装后的完整 Prompt
-     */
-    public static String buildSimplePrompt(
-            String userQuestion,
-            String conversationSummary,
-            List<AgentShortTermMemory> historyMessages,
-            List<AgentLongTermMemory> longTermMemories
-    ) {
+    public static String buildIntentPrompt(String userQuestion, List<AgentShortTermMemory> historyMessages) {
         StringBuilder prompt = new StringBuilder();
 
-        appendBaseRole(prompt);
-        appendConversationSummary(prompt, conversationSummary);
+        prompt.append("### 任务\n");
+        prompt.append("你是一个意图识别器，服务于「数据库运维 Agent」。");
+        prompt.append("该 Agent 的知识库收录 PostgreSQL 官方运维文档，");
+        prompt.append("并可调用工具对具体数据库实例做健康检查、性能指标采集、慢查询排查、执行计划分析与告警通知。\n");
+        prompt.append("请判断用户当前问题属于以下哪一种意图，只返回一个枚举值。\n\n");
+
+        prompt.append("### 意图定义\n");
+        prompt.append("1. KNOWLEDGE_BASE：询问数据库运维领域的概念、机制、原理、参数语义或最佳实践，答案可从 PostgreSQL 官方文档中检索得到。\n");
+        prompt.append("   典型形态：「X 是什么 / 有什么作用」「X 和 Y 有什么区别」「什么情况下该用 X」「X 是怎么实现的」。\n");
+        prompt.append("   例：ANALYZE 收集什么统计信息；VACUUM 与 VACUUM FULL 的区别；ACCESS EXCLUSIVE 与哪些锁模式冲突；复制槽有什么作用；如何计算缓冲池命中率。\n");
+        prompt.append("2. COMPLEX_TASK：需要针对具体数据库实例执行操作或采集实时数据的任务，");
+        prompt.append("包括健康检查、性能指标采集、慢查询排查、执行计划分析、实例巡检、告警邮件发送，以及需要多步工具编排的排查请求。\n");
+        prompt.append("   典型形态：「帮我查 / 采集 / 看看某个库」「给某个实例做……」「把结果发邮件」。\n");
+        prompt.append("   例：看看 rag 库的健康指标；采集 localhost:5432 上 rag_db 的八项指标；查 rag 库的 Top 10 慢查询；分析这条 SQL 的执行计划；给 rag 库发告警邮件。\n\n");
+
+        prompt.append("### 判断边界\n");
+        prompt.append("- 核心口径是「问机制」还是「对实例动手」：同一主题（如 VACUUM、慢查询）以概念、原理、区别或用法提问选 KNOWLEDGE_BASE；指向具体实例要求执行、采集、诊断或通知选 COMPLEX_TASK。\n");
+        prompt.append("- 问题中出现 pg_stat_*、VACUUM、EXPLAIN 等术语不代表就是 KNOWLEDGE_BASE，仍需按上述口径判断。\n");
+        prompt.append("- 问题提到具体库名或实例地址（如 rag 库、localhost:5432）时，优先考虑 COMPLEX_TASK。\n");
+        prompt.append("- 既不需要检索知识库、也不需要调用工具的问题（闲聊、通用常识、与数据库运维无关的编程或写作请求），一律选择 COMPLEX_TASK。\n\n");
+
         appendConversationHistory(prompt, historyMessages);
-        appendLongTermMemory(prompt, longTermMemories);
 
-        prompt.append("### 任务定义\n");
-        prompt.append("请根据用户的问题和当前会话历史，提供准确、清晰、有条理的回答。\n\n");
+        prompt.append("### 输出要求\n");
+        prompt.append("只返回一个枚举值（KNOWLEDGE_BASE 或 COMPLEX_TASK），不要输出任何解释。\n\n");
 
-        prompt.append("### 约束\n");
-        prompt.append("1. 回答必须基于事实、用户问题或当前会话历史。\n");
-        prompt.append("2. 禁止编造不存在的事实。\n");
-        prompt.append("3. 如果会话历史不足以判断指代关系，请明确说明需要用户补充信息。\n");
-        prompt.append("4. 优先给出直接答案，再补充解释。\n\n");
-
-        appendOutputFormat(prompt);
-        appendUserQuestion(prompt, userQuestion);
+        prompt.append("### 当前用户问题\n");
+        prompt.append(userQuestion == null ? "" : userQuestion.trim()).append("\n");
         return prompt.toString();
     }
 
@@ -263,27 +246,6 @@ public final class PromptBuilder {
     }
 
     /**
-     * 兼容旧调用：构建普通聊天 Prompt。
-     *
-     * @param userQuestion 用户本轮问题
-     * @return 组装后的完整 Prompt
-     */
-    public static String buildPrompt(String userQuestion) {
-        return buildSimplePrompt(userQuestion, List.of());
-    }
-
-    /**
-     * 兼容旧调用：conversationId 不在 PromptBuilder 中查询使用。
-     *
-     * @param userQuestion 用户本轮问题
-     * @param conversationId 会话 ID，保留该参数仅用于兼容旧代码
-     * @return 组装后的完整 Prompt
-     */
-    public static String buildPrompt(String userQuestion, String conversationId) {
-        return buildSimplePrompt(userQuestion, List.of());
-    }
-
-    /**
      * 兼容旧调用：构建只包含 RAG 资料、不包含会话历史的 Prompt。
      *
      * @param userQuestion 用户本轮问题
@@ -389,7 +351,7 @@ public final class PromptBuilder {
 
     /**
      * 将召回的长期记忆渲染为 Prompt 文本块；无记忆时返回空串（整段省略）。
-     * 供简单聊天/RAG 直接拼接、复杂任务经 {{long_term_memory}} 占位替换共用。
+     * 供 RAG 直接拼接、复杂任务经 {{long_term_memory}} 占位替换共用。
      */
     public static String buildLongTermMemoryText(List<AgentLongTermMemory> longTermMemories) {
         if (longTermMemories == null || longTermMemories.isEmpty()) {

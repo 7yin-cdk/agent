@@ -214,12 +214,11 @@ function architecture() {
   const rows2 = [
     [
       ['AuthController', ['/auth · 注册/登录/登出/me'], P.api],
-      ['AgentController', ['/agent/chat · 同步 + SSE 流式'], P.api],
       ['AgentReactiveController', ['/agent/chat/reactive/stream · SSE'], P.api],
       ['ConversationController', ['/agent/conversations · 会话 CRUD'], P.api],
+      ['HealthCheckController', ['/healthcheck/run · 手动巡检'], P.api],
     ],
     [
-      ['HealthCheckController', ['/healthcheck/run · 手动巡检'], P.api],
       ['ObservabilityController', ['/agent/observability · 可观测'], P.api],
       ['RagController', ['/rag/ingest · 已废弃'], P.neutral],
       ['BEIR 评测接口', ['/eval/beir · 检索评测'], P.api],
@@ -242,14 +241,13 @@ function architecture() {
   b += band(BX, l3.y, BW, l3.h, 'L3 应用编排层（Application Services）', P.app);
   const rows3 = [
     [
-      ['AgentServiceImpl', ['对话编排：意图识别/路由/记忆'], P.app],
-      ['ReactiveStreamingService', ['SSE 流式输出编排'], P.app],
+      ['ReactiveStreamingService', ['对话编排：意图识别/路由/记忆/SSE'], P.app],
       ['ToolCallingService', ['ReAct 工具循环编排'], P.app],
       ['RagService', ['知识库检索 + 文档入库'], P.app],
       ['QueryRewriteService', ['KB 意图下查询改写'], P.app],
+      ['ConversationService', ['会话创建/查询/标题'], P.app],
     ],
     [
-      ['ConversationService', ['会话创建/查询/标题'], P.app],
       ['ShortTermMemoryService', ['短期记忆（最近消息）'], P.app],
       ['ConversationSummaryService', ['会话摘要生成与触发'], P.app],
       ['HealthCheckRunner', ['定时健康巡检（@Scheduled）'], P.app],
@@ -266,7 +264,7 @@ function architecture() {
   }
   /* 意图路由说明条 */
   b += `<rect x="50" y="${l3.y + 236}" width="1240" height="32" rx="6" fill="#fff8e1" stroke="#ffb300" stroke-width="1"/>`;
-  b += `<text x="60" y="${l3.y + 257}" font-family="${FONT}" font-size="12.5" fill="#8d6e00">意图路由：KNOWLEDGE_BASE → RAG 检索问答  ·  COMPLEX_TASK → ReAct 工具编排  ·  SIMPLE_CHAT → 直接对话</text>`;
+  b += `<text x="60" y="${l3.y + 257}" font-family="${FONT}" font-size="12.5" fill="#8d6e00">意图路由：KNOWLEDGE_BASE → RAG 检索问答  ·  COMPLEX_TASK → ReAct 工具编排</text>`;
 
   const l4 = { y: 916, h: 306 };
   b += varrow(AX, l3.y + l3.h, l4.y, '依赖模型 / 知识处理 / 工具', '#ab47bc');
@@ -349,60 +347,57 @@ function chatFlow() {
   const W = 1300, H = 1340;
   const P = PALETTE;
   let b = '';
-  b += title(W, 'Agent 对话处理主流程（POST /agent/chat）');
-  b += footer(W, H, 'AgentServiceImpl.chat() → 意图识别 → 查询改写 → 路由（RAG / ReAct / 直接对话） → 记忆落库');
+  b += title(W, 'Agent 对话处理主流程（POST /agent/chat/reactive/stream）');
+  b += footer(W, H, 'AgentReactiveController → ReactiveStreamingService.doChatAndStream() → 意图识别 → 查询改写 → 路由（RAG / ReAct） → 记忆落库 → SSE done');
 
   const sx = 250, sw = 560, cx = sx + sw / 2;
   const sideX = 830;
 
   /* 1-8 主链路 */
-  b += step(sx, 70, sw, 50, 1, '请求进入', ['POST /agent/chat  ·  ChatRequest(query, conversationId)'], P.app);
+  b += step(sx, 70, sw, 50, 1, '请求进入', ['POST /agent/chat/reactive/stream  ·  {query, conversationId}'], P.api);
   b += varrow(cx, 120, 158, '', '#fb8c00');
-  b += step(sx, 158, sw, 50, 2, '参数校验 validateChatRequest', ['query 为空 → 400 参数错误'], P.app);
-  b += sideNote(sideX, 188, 440, 'query 为空 → 400 参数错误', '#c62828');
+  b += step(sx, 158, sw, 50, 2, '参数校验', ['query 为空 → SSE error 事件（不抛 HTTP 400）'], P.app);
+  b += sideNote(sideX, 188, 440, 'query 为空 → error 事件', '#c62828');
   b += varrow(cx, 208, 246, '', '#fb8c00');
-  b += step(sx, 246, sw, 50, 3, '获取当前用户 requireCurrentUserId', ['从 UserContextHolder 读取登录用户'], P.app);
-  b += sideNote(sideX, 276, 440, '无 userId → 401 未登录', '#c62828');
+  b += step(sx, 246, sw, 50, 3, '获取当前用户 UserContextHolder.getUserId', ['从 ThreadLocal 读取登录用户'], P.app);
+  b += sideNote(sideX, 276, 440, '无 userId → error 事件（Unauthorized）', '#c62828');
   b += varrow(cx, 296, 334, '', '#fb8c00');
-  b += step(sx, 334, sw, 50, 4, '解析 / 创建会话 resolveConversationId', ['校验会话归属；未传 ID 则自动创建（标题取前20字）'], P.app);
+  b += step(sx, 334, sw, 50, 4, '解析 / 创建会话', ['传入 conversationId 直接使用；未传则自动创建（标题取前20字）'], P.app);
   b += varrow(cx, 384, 422, '', '#fb8c00');
   b += step(sx, 422, sw, 54, 5, '加载历史与摘要', ['短期记忆 listRecentMessages（近20条） + 会话摘要 getSummary'], P.app);
   b += varrow(cx, 476, 514, '', '#fb8c00');
-  b += step(sx, 514, sw, 54, 6, '意图识别 identifyIntent', ['先规则 identifyByRules（制度/内部/报销…关键词）', '未命中 → LLM buildIntentPrompt → parseIntent；异常兜底 SIMPLE_CHAT'], P.app);
+  b += step(sx, 514, sw, 54, 6, '意图识别 identifyIntent', ['先关键词 matchByKeyword（查询知识库/查询文档、调用工具/使用工具）', '未命中 → LLM buildIntentPrompt（含最近 5 条历史）；异常兜底 COMPLEX_TASK'], P.app);
   b += varrow(cx, 568, 606, '', '#fb8c00');
   b += step(sx, 606, sw, 54, 7, '查询改写 rewriteQueryIfNeeded', ['仅 KNOWLEDGE_BASE 触发（结合会话摘要与历史）', '其余意图原样返回（unchanged）'], P.app);
   b += varrow(cx, 660, 698, '', '#fb8c00');
   b += step(sx, 698, sw, 54, 8, '构建 AgentChatContext', ['userId / conversationId / rewrittenQuery / 历史 / 摘要 / intentType'], P.app);
   b += varrow(cx, 752, 790, '', '#fb8c00');
-  b += step(sx, 790, sw, 50, 9, '路由 route(intentType)', ['switch 分派到三条执行路径'], P.app);
+  b += step(sx, 790, sw, 50, 9, '推 meta / status 事件后路由 routeStream', ['switch 分派到两条执行路径；status 携带 intentType 与 rewrittenQuery'], P.app);
 
   /* 决策菱形 */
   b += arrow(cx, 840, cx, 858, '#546e7a');
   b += diamond(cx, 892, 380, 62, 'intentType\n意图类型?', P.cross);
 
-  /* 三条路由分支 */
+  /* 两条路由分支 */
   const branchY = 952;
   b += arrow(350, 892, 260, 950, '#43a047');
   b += box(90, branchY, 340, 78, 'KNOWLEDGE_BASE', ['RAG 检索问答 RagService.queryStream', '向量+ES关键词+RRF+重排 → LLM 流式回答'], P.present, 14, 11);
-  b += arrow(530, 922, 640, 950, '#ef6c00');
-  b += box(470, branchY, 340, 78, 'COMPLEX_TASK', ['构建路由/任务 Prompt → LLM 选工具', 'ReAct 循环执行 @Tool（ToolCallingService）'], P.domain, 14, 11);
-  b += arrow(710, 892, 1020, 950, '#1565c0');
-  b += box(850, branchY, 340, 78, 'SIMPLE_CHAT', ['构建简单 Prompt（含摘要/历史）', 'llmService.chatStream 流式直接对话'], P.infra, 14, 11);
+  b += arrow(710, 892, 800, 950, '#ef6c00');
+  b += box(630, branchY, 340, 78, 'COMPLEX_TASK', ['构建路由/任务 Prompt → LLM 选工具', 'ReAct 循环执行 @Tool（ToolCallingService）'], P.domain, 14, 11);
 
   /* 汇合 */
   const convY = 1060;
   b += `<line x1="260" y1="1030" x2="260" y2="${convY}" stroke="#546e7a" stroke-width="1.8"/>`;
-  b += `<line x1="640" y1="1030" x2="640" y2="${convY}" stroke="#546e7a" stroke-width="1.8"/>`;
-  b += `<line x1="1020" y1="1030" x2="1020" y2="${convY}" stroke="#546e7a" stroke-width="1.8"/>`;
-  b += `<line x1="260" y1="${convY}" x2="1020" y2="${convY}" stroke="#546e7a" stroke-width="1.8"/>`;
+  b += `<line x1="800" y1="1030" x2="800" y2="${convY}" stroke="#546e7a" stroke-width="1.8"/>`;
+  b += `<line x1="260" y1="${convY}" x2="800" y2="${convY}" stroke="#546e7a" stroke-width="1.8"/>`;
   b += arrow(cx, convY, cx, 1088, '#546e7a');
 
   /* 10-12 */
   b += step(sx, 1088, sw, 54, 10, '保存消息与更新会话', ['saveUserAndAssistantMessages 写短期记忆（含 intentType 元数据）', 'touchConversation 更新会话活跃时间'], P.app);
   b += varrow(cx, 1142, 1180, '', '#fb8c00');
-  b += step(sx, 1180, sw, 54, 11, '触发会话摘要 triggerSummaryIfNeeded', ['达到条件时异步生成/更新会话摘要'], P.app);
+  b += step(sx, 1180, sw, 54, 11, '触发会话摘要 + 保存可观测数据', ['triggerSummaryIfNeeded（达到条件时异步生成摘要）', 'traceService.save 落 conversation_trace / llm_call_record'], P.app);
   b += varrow(cx, 1234, 1272, '', '#fb8c00');
-  b += step(sx, 1272, sw, 54, 12, '返回响应', ['ChatResponse(conversationId, answer)'], P.app);
+  b += step(sx, 1272, sw, 54, 12, '推送 done 事件', ['done(conversationId, answer) → emitter.complete()'], P.app);
 
   write('flow_chat_main', W, H, b);
   validate(W, H, b);
@@ -618,7 +613,7 @@ function authFlow() {
   b += varrow(cx, 446, 474, '', '#43a047');
   b += step(sx, 474, sw, 56, 6, '写入 UserContextHolder（ThreadLocal）', ['后续 Service 通过 getUserId() 获取当前用户'], P.cross);
   b += varrow(cx, 530, 558, '', '#fb8c00');
-  b += step(sx, 558, sw, 52, 7, '访问业务接口', ['/agent/chat · /agent/conversations · /healthcheck/run 等'], P.app);
+  b += step(sx, 558, sw, 52, 7, '访问业务接口', ['/agent/chat/reactive/stream · /agent/conversations · /healthcheck/run 等'], P.app);
   b += varrow(cx, 610, 638, '', '#fb8c00');
   b += step(sx, 638, sw, 52, 8, '退出登录 POST /auth/logout', ['删除 Redis 中的 Token 记录'], P.api);
   b += varrow(cx, 690, 718, '', '#fb8c00');
@@ -636,10 +631,10 @@ function streamingFlow() {
   const P = PALETTE;
   let b = '';
   b += title(W, 'SSE 流式对话流程（打字机效果）');
-  b += footer(W, H, 'AgentReactiveController/AgentController → SseEmitter(120s) → 后台线程：meta → status → delta* → done/error');
+  b += footer(W, H, 'AgentReactiveController → SseEmitter(120s) → 后台线程：meta → status → delta* → done/error');
 
   const sx = 220, sw = 560, cx = sx + sw / 2;
-  b += step(sx, 70, sw, 52, 1, 'POST /agent/chat/stream（SSE）', ['AgentController.chatStream / AgentReactiveController'], P.api);
+  b += step(sx, 70, sw, 52, 1, 'POST /agent/chat/reactive/stream（SSE）', ['AgentReactiveController.chatReactiveStream'], P.api);
   b += varrow(cx, 122, 150, '', '#43a047');
   b += step(sx, 150, sw, 52, 2, '参数解析 + 鉴权', ['query/conversationId；UserContextHolder 无用户 → error 事件'], P.api);
   b += varrow(cx, 202, 230, '', '#43a047');
@@ -649,11 +644,11 @@ function streamingFlow() {
   b += varrow(cx, 366, 394, '', '#fb8c00');
   b += step(sx, 394, sw, 52, 5, '加载历史 + 摘要', ['listRecentMessages(20) + getSummary'], P.app);
   b += varrow(cx, 446, 474, '', '#fb8c00');
-  b += step(sx, 474, sw, 52, 6, '意图识别 + 查询改写', ['规则/LLM 识别 · KNOWLEDGE_BASE 才改写（记录 INTENT 调用）'], P.domain);
+  b += step(sx, 474, sw, 52, 6, '意图识别 + 查询改写', ['先关键词短路，未命中再走 LLM（共用 buildIntentPrompt）· KB 才改写'], P.domain);
   b += varrow(cx, 526, 554, '', '#ab47bc');
   b += step(sx, 554, sw, 56, 7, '发送 meta + status 事件', ['meta(conversationId) → status(intentType, rewrittenQuery)'], P.cross);
   b += varrow(cx, 610, 638, '', '#ab47bc');
-  b += step(sx, 638, sw, 56, 8, '流式路由 routeStream', ['SIMPLE_CHAT/KNOWLEDGE_BASE → chatStream 逐 token', 'COMPLEX_TASK → ReAct 后按 6 字符分块'], P.domain);
+  b += step(sx, 638, sw, 56, 8, '流式路由 routeStream', ['KNOWLEDGE_BASE → chatStream 逐 token', 'COMPLEX_TASK → ReAct 后按 6 字符分块'], P.domain);
   b += varrow(cx, 694, 722, '', '#1e88e5');
   b += step(sx, 722, sw, 52, 9, '发送 delta 事件', ['每次收到 token → sendEvent(delta, content)'], P.present);
   b += varrow(cx, 774, 802, '', '#fb8c00');
@@ -680,7 +675,7 @@ function memoryDiagram() {
   b += footer(W, H, '短期记忆(agent_short_term_memory) + 会话摘要(agent_conversation_summary) + 会话管理(agent_conversation) · 存储于 PostgreSQL');
 
   /* 顶部：对话主流程触发 */
-  b += box(330, 66, 400, 54, '对话主流程（AgentServiceImpl / ReactiveStreamingService）', ['每轮：读历史 + 读摘要 + 写消息 + 触发摘要'], P.app, 14.5, 11.5);
+  b += box(330, 66, 400, 54, '对话主流程（ReactiveStreamingService）', ['每轮：读历史 + 读摘要 + 写消息 + 触发摘要'], P.app, 14.5, 11.5);
   b += arrow(530, 120, 190, 168, '#546e7a');
   b += arrow(530, 120, 530, 168, '#546e7a');
   b += arrow(530, 120, 870, 168, '#546e7a');
@@ -724,7 +719,7 @@ function observabilityDiagram() {
   b += footer(W, H, 'ConversationTraceCollector → ConversationTraceService.save → conversation_trace + llm_call_record + tool_call_record · ObservabilityController 查询');
 
   /* 采集源头 */
-  b += box(70, 70, 300, 86, '数据采集源头', ['ReactiveStreamingService / AgentServiceImpl', '每轮对话创建 collector'], P.present, 14.5, 11.5);
+  b += box(70, 70, 300, 86, '数据采集源头', ['ReactiveStreamingService', '每轮对话创建 collector'], P.present, 14.5, 11.5);
   b += box(400, 70, 300, 86, '定时巡检 ReAct', ['HealthCheckRunner 巡检同样使用', 'collector 记录 LLM/工具调用'], P.present, 14.5, 11.5);
   b += box(730, 70, 300, 86, '全链路追踪（横切）', ['TracingFilter + Micrometer Tracing', 'OpenTelemetry OTLP 导出 · baggage: userId/conversationId'], P.cross, 14.5, 11.5);
 
@@ -757,7 +752,7 @@ function observabilityDiagram() {
 
   /* 底部说明 */
   b += `<rect x="70" y="772" width="960" height="52" rx="8" fill="#fffde7" stroke="#f9a825" stroke-width="1"/>`;
-  b += `<text x="90" y="796" font-family="${FONT}" font-size="12.5" fill="#7a5900">可观测覆盖范围：每轮对话（LLM 调用：INTENT/ROUTE/RAG_GENERATE/SIMPLE_CHAT/REACT_LLM；工具调用：全部 @Tool）</text>`;
+  b += `<text x="90" y="796" font-family="${FONT}" font-size="12.5" fill="#7a5900">可观测覆盖范围：每轮对话（LLM 调用：INTENT/ROUTE/RAG_GENERATE/REACT_LLM；工具调用：全部 @Tool）</text>`;
   b += `<text x="90" y="814" font-family="${FONT}" font-size="12.5" fill="#7a5900">· 巡检（scheduled-healthcheck） · 前端以 observability.html 展示，Actuator 暴露 health/info/tracings 端点</text>`;
 
   write('diagram_observability', W, H, b);

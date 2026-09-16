@@ -305,11 +305,11 @@
             font-size: 12px;
         }
 
-        .chat-panel {
+        .conversation-panel {
             min-width: 0;
         }
 
-        .chat-heading {
+        .section-heading {
             display: flex;
             align-items: flex-start;
             justify-content: space-between;
@@ -317,61 +317,21 @@
             padding: 18px 18px 0;
         }
 
-        .chat-heading h2 {
+        .section-heading h2 {
             margin: 0;
             font-size: 18px;
         }
 
-        .chat-heading p {
+        .section-heading p {
             margin: 6px 0 0;
             color: var(--muted);
             font-size: 13px;
             line-height: 1.5;
         }
 
-        .chat-log {
-            display: grid;
-            gap: 12px;
-            min-height: 310px;
-            max-height: 520px;
-            overflow: auto;
-            padding: 14px;
-            border: 1px solid var(--line);
-            border-radius: 8px;
-            background: #fbfdff;
-        }
-
-        .message {
-            display: grid;
-            gap: 5px;
-            max-width: 92%;
-            padding: 10px 12px;
-            border-radius: 8px;
-            line-height: 1.6;
-            white-space: pre-wrap;
-            word-break: break-word;
-        }
-
-        .message.user {
-            justify-self: end;
-            color: #ffffff;
-            background: var(--primary);
-        }
-
-        .message.assistant {
-            justify-self: start;
-            border: 1px solid var(--line);
-            background: #ffffff;
-        }
-
-        .message .role {
-            font-size: 12px;
-            opacity: 0.76;
-        }
-
         .tool-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr;
             gap: 18px;
             margin-top: 18px;
         }
@@ -437,7 +397,7 @@
 
         @media (max-width: 720px) {
             .topbar,
-            .chat-heading {
+            .section-heading {
                 align-items: flex-start;
                 flex-direction: column;
             }
@@ -454,7 +414,7 @@
     <header class="topbar">
         <div class="brand">
             <h1>Agent 控制台</h1>
-            <p>登录后可以创建多个会话，聊天请求会自动携带当前会话 ID 和 Bearer Token。</p>
+            <p>登录后可管理会话与上传知识库文档；聊天请使用 Vue SPA 首页或 /legacy/stream.html。</p>
         </div>
         <div id="userChip" class="user-chip">
             <div class="avatar" id="avatarText">U</div>
@@ -532,28 +492,16 @@
             </aside>
 
             <section>
-                <div class="panel chat-panel">
-                    <div class="chat-heading">
+                <div class="panel conversation-panel">
+                    <div class="section-heading">
                         <div>
                             <h2 id="activeConversationTitle">未选择会话</h2>
-                            <p id="activeConversationMeta">发送第一条消息时，后端会自动创建会话。</p>
+                            <p id="activeConversationMeta">聊天入口已迁移至 Vue SPA 首页，或旧版 /legacy/stream.html 调试页。</p>
                         </div>
                         <div class="actions">
                             <button class="secondary compact" id="renameConversationButton" type="button">改名</button>
                             <button class="danger compact" id="deleteConversationButton" type="button">删除</button>
                         </div>
-                    </div>
-                    <div class="panel-body">
-                        <div id="chatLog" class="chat-log"></div>
-                        <div class="field" style="margin-top: 14px;">
-                            <label for="chatInput">问题</label>
-                            <textarea id="chatInput" placeholder="输入你想问 Agent 的问题"></textarea>
-                        </div>
-                        <div class="actions">
-                            <button id="sendChatButton" type="button">发送</button>
-                            <button id="clearChatButton" class="secondary" type="button">清空显示</button>
-                        </div>
-                        <div id="chatStatus" class="status"></div>
                     </div>
                 </div>
 
@@ -571,16 +519,6 @@
                             <div id="uploadStatus" class="status"></div>
                         </div>
                     </div>
-
-                    <div class="panel">
-                        <div class="panel-header">
-                            <h2>接口状态</h2>
-                            <p>聊天响应会返回本次所属 conversationId。</p>
-                        </div>
-                        <div class="panel-body">
-                            <div id="apiStatus" class="status">等待请求。</div>
-                        </div>
-                    </div>
                 </div>
             </section>
         </section>
@@ -592,15 +530,14 @@
     const TOKEN_KEY = "agent_auth_token";
     const USER_KEY = "agent_user_info";
     const CONVERSATION_KEY = "agent_current_conversation_id";
-    const LOCAL_MESSAGES_KEY = "agent_local_messages";
+    const LEGACY_MESSAGES_KEY = "agent_local_messages";
 
     const state = {
         mode: "login",
         token: localStorage.getItem(TOKEN_KEY) || "",
         user: readJson(localStorage.getItem(USER_KEY)),
         conversations: [],
-        currentConversationId: localStorage.getItem(CONVERSATION_KEY) || "",
-        localMessages: readJson(localStorage.getItem(LOCAL_MESSAGES_KEY)) || {}
+        currentConversationId: localStorage.getItem(CONVERSATION_KEY) || ""
     };
 
     const elements = {
@@ -631,15 +568,9 @@
         activeConversationMeta: document.getElementById("activeConversationMeta"),
         renameConversationButton: document.getElementById("renameConversationButton"),
         deleteConversationButton: document.getElementById("deleteConversationButton"),
-        chatLog: document.getElementById("chatLog"),
-        chatInput: document.getElementById("chatInput"),
-        sendChatButton: document.getElementById("sendChatButton"),
-        clearChatButton: document.getElementById("clearChatButton"),
-        chatStatus: document.getElementById("chatStatus"),
         fileInput: document.getElementById("fileInput"),
         uploadButton: document.getElementById("uploadButton"),
-        uploadStatus: document.getElementById("uploadStatus"),
-        apiStatus: document.getElementById("apiStatus")
+        uploadStatus: document.getElementById("uploadStatus")
     };
 
     elements.loginTab.addEventListener("click", () => switchMode("login"));
@@ -652,8 +583,6 @@
     elements.refreshConversationsButton.addEventListener("click", loadConversations);
     elements.renameConversationButton.addEventListener("click", renameConversation);
     elements.deleteConversationButton.addEventListener("click", deleteConversation);
-    elements.sendChatButton.addEventListener("click", sendChatStream);
-    elements.clearChatButton.addEventListener("click", clearVisibleChat);
     elements.uploadButton.addEventListener("click", uploadFile);
 
     render();
@@ -783,10 +712,8 @@
             });
             state.currentConversationId = conversation.conversationId;
             localStorage.setItem(CONVERSATION_KEY, state.currentConversationId);
-            state.localMessages[state.currentConversationId] = [];
-            saveLocalMessages();
             await loadConversations();
-            setStatus(elements.chatStatus, "已创建新会话", "ok");
+            setStatus(elements.conversationStatus, "已创建新会话", "ok");
         } catch (error) {
             setStatus(elements.conversationStatus, error.message, "error");
         }
@@ -795,14 +722,14 @@
     function selectConversation(conversationId) {
         state.currentConversationId = conversationId;
         localStorage.setItem(CONVERSATION_KEY, conversationId);
-        setStatus(elements.chatStatus, "已切换会话。当前后端暂未提供历史消息查询接口，页面只显示本浏览器本地缓存的消息。", "warning");
+        setStatus(elements.conversationStatus, "已切换会话", "ok");
         render();
     }
 
     async function renameConversation() {
         const conversation = currentConversation();
         if (!conversation) {
-            setStatus(elements.chatStatus, "请先选择会话", "error");
+            setStatus(elements.conversationStatus, "请先选择会话", "error");
             return;
         }
         const title = window.prompt("请输入新的会话标题", conversation.title || "新会话");
@@ -815,16 +742,16 @@
                 body: JSON.stringify({title: title.trim() || "新会话"})
             });
             await loadConversations();
-            setStatus(elements.chatStatus, "会话标题已更新", "ok");
+            setStatus(elements.conversationStatus, "会话标题已更新", "ok");
         } catch (error) {
-            setStatus(elements.chatStatus, error.message, "error");
+            setStatus(elements.conversationStatus, error.message, "error");
         }
     }
 
     async function deleteConversation() {
         const conversation = currentConversation();
         if (!conversation) {
-            setStatus(elements.chatStatus, "请先选择会话", "error");
+            setStatus(elements.conversationStatus, "请先选择会话", "error");
             return;
         }
         if (!window.confirm(`确认删除会话「${conversation.title || conversation.conversationId}」？`)) {
@@ -832,132 +759,12 @@
         }
         try {
             await request(`/agent/conversations/${conversation.conversationId}`, {method: "DELETE", parseAsText: true});
-            delete state.localMessages[conversation.conversationId];
-            saveLocalMessages();
             state.currentConversationId = "";
             localStorage.removeItem(CONVERSATION_KEY);
             await loadConversations();
-            setStatus(elements.chatStatus, "会话已删除", "ok");
+            setStatus(elements.conversationStatus, "会话已删除", "ok");
         } catch (error) {
-            setStatus(elements.chatStatus, error.message, "error");
-        }
-    }
-
-    async function sendChat() {
-        const query = elements.chatInput.value.trim();
-        if (!query) {
-            setStatus(elements.chatStatus, "请输入问题", "error");
-            return;
-        }
-
-        const pendingConversationId = state.currentConversationId;
-        appendMessage("user", query, pendingConversationId);
-        elements.chatInput.value = "";
-        elements.sendChatButton.disabled = true;
-        setStatus(elements.chatStatus, "Agent 正在回复...");
-
-        try {
-            const data = await request("/agent/chat", {
-                method: "POST",
-                body: JSON.stringify({
-                    conversationId: pendingConversationId || null,
-                    query
-                })
-            });
-            state.currentConversationId = data.conversationId;
-            localStorage.setItem(CONVERSATION_KEY, state.currentConversationId);
-            movePendingMessages(pendingConversationId, state.currentConversationId);
-            appendMessage("assistant", data.answer, state.currentConversationId);
-            setStatus(elements.chatStatus, `回复完成，会话：${data.conversationId}`, "ok");
-            setStatus(elements.apiStatus, JSON.stringify(data, null, 2), "ok");
-            await loadConversations();
-        } catch (error) {
-            setStatus(elements.chatStatus, error.message, "error");
-            if (error.status === 401) {
-                clearSession();
-            }
-        } finally {
-            elements.sendChatButton.disabled = false;
-            render();
-        }
-    }
-
-    async function sendChatStream() {
-        const query = elements.chatInput.value.trim();
-        if (!query) {
-            setStatus(elements.chatStatus, "Please enter a question.", "error");
-            return;
-        }
-
-        const pendingConversationId = state.currentConversationId;
-        appendMessage("user", query, pendingConversationId);
-        elements.chatInput.value = "";
-        elements.sendChatButton.disabled = true;
-        setStatus(elements.chatStatus, "Agent streaming...");
-
-        try {
-            let assistantConversationId = pendingConversationId;
-            let assistantMessageIndex = -1;
-            let assistantAnswer = "";
-
-            await streamRequest("/agent/chat/stream", {
-                method: "POST",
-                body: JSON.stringify({
-                    conversationId: pendingConversationId || null,
-                    query
-                })
-            }, {
-                meta(data) {
-                    if (!data || !data.conversationId) {
-                        return;
-                    }
-                    state.currentConversationId = data.conversationId;
-                    localStorage.setItem(CONVERSATION_KEY, state.currentConversationId);
-                    movePendingMessages(pendingConversationId, state.currentConversationId);
-                    assistantConversationId = state.currentConversationId;
-                },
-                status(data) {
-                    setStatus(elements.chatStatus, `Agent streaming... ${data && data.intentType ? data.intentType : ""}`);
-                },
-                delta(data) {
-                    const content = data && data.content ? data.content : "";
-                    if (!content) {
-                        return;
-                    }
-                    if (assistantMessageIndex < 0) {
-                        assistantMessageIndex = appendMessage("assistant", "", assistantConversationId);
-                    }
-                    assistantAnswer += content;
-                    updateMessage(assistantConversationId, assistantMessageIndex, assistantAnswer);
-                },
-                done(data) {
-                    if (data && data.conversationId) {
-                        state.currentConversationId = data.conversationId;
-                        localStorage.setItem(CONVERSATION_KEY, state.currentConversationId);
-                    }
-                    if (assistantMessageIndex < 0) {
-                        assistantMessageIndex = appendMessage(
-                            "assistant",
-                            data && data.answer ? data.answer : assistantAnswer,
-                            state.currentConversationId
-                        );
-                    }
-                    setStatus(elements.chatStatus, `Stream complete: ${state.currentConversationId}`, "ok");
-                    setStatus(elements.apiStatus, JSON.stringify(data || {}, null, 2), "ok");
-                },
-                error(data) {
-                    throw new Error(data && data.message ? data.message : "Stream failed");
-                }
-            });
-            await loadConversations();
-        } catch (error) {
-            setStatus(elements.chatStatus, error.message, "error");
-            if (error.status === 401) {
-                clearSession();
-            }
-        } finally {
-            elements.sendChatButton.disabled = false;
-            render();
+            setStatus(elements.conversationStatus, error.message, "error");
         }
     }
 
@@ -1023,90 +830,6 @@
         return text ? JSON.parse(text) : null;
     }
 
-    async function streamRequest(path, options = {}, handlers = {}) {
-        const headers = new Headers(options.headers || {});
-        const needsAuth = options.auth !== false;
-
-        if (needsAuth && state.token) {
-            headers.set("Authorization", `Bearer ${state.token}`);
-        }
-        if (!headers.has("Content-Type") && options.body && !(options.body instanceof FormData)) {
-            headers.set("Content-Type", "application/json;charset=UTF-8");
-        }
-        headers.set("Accept", "text/event-stream");
-
-        const response = await fetch(`${API_BASE}${path}`, {
-            method: options.method || "GET",
-            headers,
-            body: options.body
-        });
-
-        if (!response.ok) {
-            const text = await response.text();
-            const message = extractErrorMessage(text) || `Request failed: ${response.status}`;
-            const error = new Error(message);
-            error.status = response.status;
-            throw error;
-        }
-
-        if (!response.body) {
-            throw new Error("Streaming response is not supported by this browser.");
-        }
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder("utf-8");
-        let buffer = "";
-
-        while (true) {
-            const {value, done} = await reader.read();
-            if (done) {
-                break;
-            }
-            buffer += decoder.decode(value, {stream: true});
-            const blocks = buffer.split(/\r?\n\r?\n/);
-            buffer = blocks.pop() || "";
-            for (const block of blocks) {
-                handleSseBlock(block, handlers);
-            }
-        }
-
-        buffer += decoder.decode();
-        if (buffer.trim()) {
-            handleSseBlock(buffer, handlers);
-        }
-    }
-
-    function handleSseBlock(block, handlers) {
-        let eventName = "message";
-        const dataLines = [];
-
-        for (const rawLine of block.split(/\r?\n/)) {
-            const line = rawLine.trimEnd();
-            if (line.startsWith("event:")) {
-                eventName = line.slice(6).trim();
-            } else if (line.startsWith("data:")) {
-                dataLines.push(line.slice(5).trimStart());
-            }
-        }
-
-        if (!dataLines.length) {
-            return;
-        }
-
-        const rawData = dataLines.join("\n");
-        let data = rawData;
-        try {
-            data = JSON.parse(rawData);
-        } catch (error) {
-            // Plain text SSE data is still valid.
-        }
-
-        const handler = handlers[eventName];
-        if (handler) {
-            handler(data);
-        }
-    }
-
     function saveSession(data) {
         state.token = data.token;
         state.user = data.user;
@@ -1119,16 +842,14 @@
         state.user = null;
         state.conversations = [];
         state.currentConversationId = "";
-        state.localMessages = {};
         localStorage.removeItem(TOKEN_KEY);
         localStorage.removeItem(USER_KEY);
         localStorage.removeItem(CONVERSATION_KEY);
-        localStorage.removeItem(LOCAL_MESSAGES_KEY);
+        localStorage.removeItem(LEGACY_MESSAGES_KEY);
         elements.tokenBox.classList.remove("active");
         elements.tokenBox.textContent = "";
         setStatus(elements.meStatus, "");
         setStatus(elements.conversationStatus, "");
-        setStatus(elements.chatStatus, "");
     }
 
     function render() {
@@ -1145,7 +866,6 @@
 
         renderConversations();
         renderActiveConversation();
-        renderLocalMessages();
     }
 
     function renderConversations() {
@@ -1153,7 +873,7 @@
         if (!state.conversations.length) {
             const empty = document.createElement("div");
             empty.className = "status";
-            empty.textContent = "暂无会话。可以点击新建会话，或直接发送第一条消息自动创建。";
+            empty.textContent = "暂无会话。点击新建会话即可创建。";
             elements.conversationList.appendChild(empty);
             return;
         }
@@ -1185,86 +905,12 @@
 
         if (!conversation) {
             elements.activeConversationTitle.textContent = "未选择会话";
-            elements.activeConversationMeta.textContent = "发送第一条消息时，后端会自动创建会话。";
+            elements.activeConversationMeta.textContent = "聊天入口已迁移至 Vue SPA 首页，或旧版 /legacy/stream.html 调试页。";
             return;
         }
 
         elements.activeConversationTitle.textContent = conversation.title || "新会话";
         elements.activeConversationMeta.textContent = `conversationId: ${conversation.conversationId}`;
-    }
-
-    function renderLocalMessages() {
-        elements.chatLog.innerHTML = "";
-        const key = state.currentConversationId || "__pending__";
-        const messages = state.localMessages[key] || [];
-        if (!messages.length) {
-            const empty = document.createElement("div");
-            empty.className = "status";
-            empty.textContent = "当前页面还没有显示消息。后端短期记忆会参与回答，但此页面只缓存本浏览器发送过的消息。";
-            elements.chatLog.appendChild(empty);
-            return;
-        }
-        for (const message of messages) {
-            renderMessageBubble(message.role, message.content);
-        }
-    }
-
-    function appendMessage(role, content, conversationId = state.currentConversationId) {
-        const key = conversationId || "__pending__";
-        if (!state.localMessages[key]) {
-            state.localMessages[key] = [];
-        }
-        state.localMessages[key].push({role, content});
-        const index = state.localMessages[key].length - 1;
-        saveLocalMessages();
-        renderLocalMessages();
-        return index;
-    }
-
-    function updateMessage(conversationId, index, content) {
-        const key = conversationId || "__pending__";
-        const messages = state.localMessages[key] || [];
-        if (!messages[index]) {
-            return;
-        }
-        messages[index].content = content;
-        saveLocalMessages();
-        renderLocalMessages();
-    }
-
-    function renderMessageBubble(role, content) {
-        const item = document.createElement("div");
-        item.className = `message ${role}`;
-
-        const roleLabel = document.createElement("div");
-        roleLabel.className = "role";
-        roleLabel.textContent = role === "user" ? "你" : "Agent";
-
-        const body = document.createElement("div");
-        body.textContent = content;
-
-        item.append(roleLabel, body);
-        elements.chatLog.appendChild(item);
-        elements.chatLog.scrollTop = elements.chatLog.scrollHeight;
-    }
-
-    function movePendingMessages(previousConversationId, nextConversationId) {
-        if (previousConversationId || !state.localMessages.__pending__) {
-            return;
-        }
-        state.localMessages[nextConversationId] = [
-            ...(state.localMessages[nextConversationId] || []),
-            ...state.localMessages.__pending__
-        ];
-        delete state.localMessages.__pending__;
-        saveLocalMessages();
-    }
-
-    function clearVisibleChat() {
-        const key = state.currentConversationId || "__pending__";
-        state.localMessages[key] = [];
-        saveLocalMessages();
-        renderLocalMessages();
     }
 
     function currentConversation() {
@@ -1278,10 +924,6 @@
         }
         elements.tokenBox.classList.toggle("active");
         elements.tokenBox.textContent = state.token;
-    }
-
-    function saveLocalMessages() {
-        localStorage.setItem(LOCAL_MESSAGES_KEY, JSON.stringify(state.localMessages));
     }
 
     function setStatus(element, message, type) {

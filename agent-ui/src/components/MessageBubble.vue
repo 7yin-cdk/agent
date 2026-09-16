@@ -6,8 +6,7 @@ const props = defineProps({ message: { type: Object, required: true } })
 
 const INTENT = {
   KNOWLEDGE_BASE: { text: '知识问答', cls: 'badge-info' },
-  COMPLEX_TASK: { text: '复杂任务', cls: 'badge-warning' },
-  SIMPLE_CHAT: { text: '日常对话', cls: 'badge-neutral' }
+  COMPLEX_TASK: { text: '复杂任务', cls: 'badge-warning' }
 }
 const intentBadge = () => (props.message.intentType ? INTENT[props.message.intentType] : null)
 

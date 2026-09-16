@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * 模块四 PromptBuilder 长期记忆注入单测（纯静态，离线）。
  * <p>
- * 覆盖：简单聊天/RAG 有记忆注入、无记忆整段省略；复杂任务 {{long_term_memory}}
+ * 覆盖：RAG 有记忆注入、无记忆整段省略；复杂任务 {{long_term_memory}}
  * 占位替换且空记忆不留占位符。
  */
 class PromptBuilderLongTermMemoryTest {
@@ -31,18 +31,10 @@ class PromptBuilderLongTermMemoryTest {
     }
 
     @Test
-    void simplePromptInjectsMemoryWhenPresent() {
-        String prompt = PromptBuilder.buildSimplePrompt("我的核心库有哪些？", null, List.of(), oneProfile());
-        int historyIdx = prompt.indexOf("### 当前会话历史");
-        int memoryIdx = prompt.indexOf("### 长期记忆");
-        assertTrue(memoryIdx > historyIdx, "长期记忆段应在历史段之后");
-        assertTrue(prompt.contains("【记忆1】[用户画像] 运维小王负责 orders 库与 prod_cluster"),
-                "应含中文类别标签的记忆行");
-    }
-
-    @Test
-    void simplePromptOmitsMemorySectionWhenEmpty() {
-        String prompt = PromptBuilder.buildSimplePrompt("你好", null, List.of(), List.of());
+    void ragPromptOmitsMemorySectionWhenEmpty() {
+        String prompt = PromptBuilder.buildRagPrompt(
+                "orders 库最近有锁等待吗？", "orders 库最近有锁等待吗？", null,
+                List.of(), List.of("【资料】orders 锁等待案例"), List.of());
         assertFalse(prompt.contains("### 长期记忆"), "无记忆时不应注入记忆段");
         assertFalse(prompt.contains("{{long_term_memory}}"), "不应泄漏占位符");
     }
@@ -85,7 +77,7 @@ class PromptBuilderLongTermMemoryTest {
 
     @Test
     void categoryLabels() {
-        String prompt = PromptBuilder.buildSimplePrompt("q", null, List.of(), List.of(
+        String prompt = PromptBuilder.buildRagPrompt("q", "q", null, List.of(), List.of(), List.of(
                 memory("USER_PROFILE", "a"), memory("PREFERENCE", "b"), memory("CONSTRAINT", "c"),
                 memory("ENTITY", "d"), memory("EXPERIENCE", "e")));
         assertTrue(prompt.contains("【记忆1】[用户画像] a"));

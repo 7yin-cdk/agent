@@ -143,9 +143,7 @@ agent-ui/
 ### 对话
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| POST | `/agent/chat` | 发起 Agent 聊天（JSON 请求体，或兼容的 `query` / `conversationId` 参数） |
-| POST | `/agent/chat/stream` | 聊天流式输出（SSE） |
-| POST | `/agent/chat/reactive/stream` | 响应式流式聊天（SseEmitter + 后台线程，事件 `meta → status → delta* → done / error`，SPA 使用） |
+| POST | `/agent/chat/reactive/stream` | 响应式流式聊天（SseEmitter + 后台线程，事件 `meta → status → delta* → done / error`，SPA 与评测驱动均走此端点） |
 
 ### 认证与会话
 | 方法 | 路径 | 说明 |

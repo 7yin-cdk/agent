@@ -18,7 +18,7 @@ let chart = null
 
 const statusFilter = ref('')
 const intentFilter = ref('')
-const INTENT = { KNOWLEDGE_BASE: '知识问答', COMPLEX_TASK: '复杂任务', SIMPLE_CHAT: '对话' }
+const INTENT = { KNOWLEDGE_BASE: '知识问答', COMPLEX_TASK: '复杂任务' }
 
 const filtered = computed(() =>
   traces.value.filter(
