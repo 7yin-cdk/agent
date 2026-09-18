@@ -152,11 +152,16 @@ class AgentClient:
         response.raise_for_status()
         return response.json()
 
-    def judge(self, query, answer, key_points):
+    def judge(self, query, answer, key_points, tool_calls=None):
         response = self.session.post(
             f"{self.base_url}/eval/judge",
             headers=self._auth_headers(),
-            json={"query": query, "answer": answer, "keyPoints": key_points or []},
+            json={
+                "query": query,
+                "answer": answer,
+                "keyPoints": key_points or [],
+                "toolCalls": tool_calls or [],
+            },
             timeout=config.TIMEOUT_SECONDS,
         )
         response.raise_for_status()

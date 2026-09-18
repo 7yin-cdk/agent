@@ -1,22 +1,15 @@
 package com.library.agent.tool;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.HikariDataSource;
+import com.library.agent.tool.retry.SqlRetryClassifier;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
-import jakarta.annotation.PreDestroy;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 /**
  * PostgreSQL 慢查询采集工具。
@@ -25,31 +18,7 @@ import java.util.concurrent.ConcurrentMap;
  * 包含查询文本、执行次数、各维度耗时、缓冲区命中率等关键信息。
  */
 @Component
-public class SlowQueryTool {
-
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-
-    /**
-     * 连接池缓存，key = "instance/database"，复用同一实例的连接池。
-     */
-    private final ConcurrentMap<String, HikariDataSource> poolCache = new ConcurrentHashMap<>();
-
-    @Value("${spring.datasource.username}")
-    private String dbUsername;
-
-    @Value("${spring.datasource.password}")
-    private String dbPassword;
-
-    @PreDestroy
-    public void closeAllPools() {
-        for (HikariDataSource ds : poolCache.values()) {
-            try {
-                ds.close();
-            } catch (Exception ignored) {
-            }
-        }
-        poolCache.clear();
-    }
+public class SlowQueryTool extends AbstractPostgresTool {
 
     /**
      * 查询数据库中平均执行时间最长的 Top 10 慢查询。
@@ -73,17 +42,15 @@ public class SlowQueryTool {
             return errorJson("数据库名称不能为空");
         }
 
-        HikariDataSource ds = getOrCreatePool(instance, database);
+        return executeWithRetry(instance, database, "慢查询采集失败", conn -> {
 
-        try (Connection conn = ds.getConnection()) {
-
-            // 检查 pg_stat_statements 扩展是否已安装
+            /* 检查 pg_stat_statements 扩展是否已安装；连接级失败由 checkExtension 上抛触发重试 */
             if (!checkExtension(conn)) {
                 return errorJson("pg_stat_statements 扩展未安装或未启用，"
                         + "请在目标数据库中执行: CREATE EXTENSION IF NOT EXISTS pg_stat_statements");
             }
 
-            // 查询 Top 10 慢查询，按平均执行时间降序
+            /* 查询 Top 10 慢查询，按平均执行时间降序 */
             String sql =
                     "SELECT queryid, " +
                     "       query, " +
@@ -145,24 +112,12 @@ public class SlowQueryTool {
                 }
             }
 
-            ObjectNode result = OBJECT_MAPPER.createObjectNode();
-            result.put("success", true);
-            result.put("instance", instance);
-            result.put("database", database);
+            ObjectNode result = baseResult(instance, database);
             result.put("totalSlowQueries", slowQueries.size());
             result.set("slowQueries", slowQueries);
 
             return OBJECT_MAPPER.writeValueAsString(result);
-
-        } catch (Exception e) {
-            // 连接异常时清理失效的连接池
-            poolCache.remove(poolKey(instance, database));
-            try {
-                ds.close();
-            } catch (Exception ignored) {
-            }
-            return errorJson("慢查询采集失败: " + e.getMessage());
-        }
+        });
     }
 
     /**
@@ -170,6 +125,9 @@ public class SlowQueryTool {
      * <p>
      * 调用后将清空所有历史查询统计，重新开始计数。
      * 通常在性能基线变更或清理测试数据后使用。
+     * <p>
+     * 本方法可安全重试：{@code pg_stat_statements_reset()} 幂等，重复执行等同于执行一次，
+     * 因此瞬时故障重试不会带来额外副作用。新增写工具时须先确认其幂等性再复用本模板。
      *
      * @param instance 数据库实例地址
      * @param database 数据库名称
@@ -188,9 +146,8 @@ public class SlowQueryTool {
             return errorJson("数据库名称不能为空");
         }
 
-        HikariDataSource ds = getOrCreatePool(instance, database);
+        return executeWithRetry(instance, database, "重置统计数据失败", conn -> {
 
-        try (Connection conn = ds.getConnection()) {
             if (!checkExtension(conn)) {
                 return errorJson("pg_stat_statements 扩展未安装或未启用");
             }
@@ -199,22 +156,11 @@ public class SlowQueryTool {
                 stmt.execute("SELECT pg_stat_statements_reset()");
             }
 
-            ObjectNode result = OBJECT_MAPPER.createObjectNode();
-            result.put("success", true);
-            result.put("instance", instance);
-            result.put("database", database);
+            ObjectNode result = baseResult(instance, database);
             result.put("message", "pg_stat_statements 统计已重置");
 
             return OBJECT_MAPPER.writeValueAsString(result);
-
-        } catch (Exception e) {
-            poolCache.remove(poolKey(instance, database));
-            try {
-                ds.close();
-            } catch (Exception ignored) {
-            }
-            return errorJson("重置统计数据失败: " + e.getMessage());
-        }
+        });
     }
 
     // ======================== 辅助方法 ========================
@@ -222,7 +168,8 @@ public class SlowQueryTool {
     /**
      * 检查 pg_stat_statements 扩展是否已安装。
      * <p>
-     * 通过查询 pg_extension 系统表判断。
+     * 通过查询 pg_extension 系统表判断。连接级失败必须先上抛：否则死连接会被静默判成
+     * "扩展未安装"，把大模型引向创建扩展这一完全错误的方向。
      */
     private boolean checkExtension(Connection conn) {
         String sql = "SELECT count(*) FROM pg_extension WHERE extname = 'pg_stat_statements'";
@@ -231,42 +178,9 @@ public class SlowQueryTool {
             rs.next();
             return rs.getLong(1) > 0;
         } catch (Exception e) {
+            SqlRetryClassifier.rethrowIfConnectionLevel(e);
             return false;
         }
     }
 
-    // ======================== 连接池管理 ========================
-
-    private HikariDataSource getOrCreatePool(String instance, String database) {
-        String key = poolKey(instance, database);
-        return poolCache.computeIfAbsent(key, k -> createPool(instance, database));
-    }
-
-    private HikariDataSource createPool(String instance, String database) {
-        HikariConfig config = new HikariConfig();
-        config.setJdbcUrl("jdbc:postgresql://" + instance + "/" + database);
-        config.setUsername(dbUsername);
-        config.setPassword(dbPassword);
-        config.setDriverClassName("org.postgresql.Driver");
-        config.setMinimumIdle(0);
-        config.setMaximumPoolSize(2);
-        config.setIdleTimeout(300_000);
-        config.setMaxLifetime(600_000);
-        config.setConnectionTimeout(10_000);
-        config.addDataSourceProperty("socketTimeout", "20");
-        return new HikariDataSource(config);
-    }
-
-    private static String poolKey(String instance, String database) {
-        return instance + "/" + database;
-    }
-
-    // ======================== JSON 构建工具 ========================
-
-    private String errorJson(String message) {
-        ObjectNode root = OBJECT_MAPPER.createObjectNode();
-        root.put("success", false);
-        root.put("error", message);
-        return root.toString();
-    }
 }

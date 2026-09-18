@@ -518,7 +518,7 @@ function reactFlow() {
   b += arrow(585, 486, 700, 476, '#43a047');
   b += box(rx, 448, rw, 56, '是 → 返回最终答案', ['finish.answer（空则提示无答案）'], P.present, 13.5, 11);
   b += arrow(cx, 514, cx, 560, '#546e7a');
-  b += step(sx, 560, sw, 52, 6, '校验工具动作 validateToolAction', ['arguments 与 argument_sources 键完全一致', '必填参数不能仅 HISTORY_ONLY / 缺参'], P.app);
+  b += step(sx, 560, sw, 52, 6, '校验工具动作 validateToolAction', ['arguments 与 argument_sources 键完全一致', '来源：EXPLICIT / REFERENCED / TOOL_OUTPUT（跨工具，取自上一步输出）/ HISTORY_ONLY', '必填参数不能仅 HISTORY_ONLY / 缺参'], P.app);
   b += arrow(660, 586, 700, 570, '#ef6c00');
   b += box(rx, 550, rw, 56, '校验不通过', ['返回澄清信息：请用户显式提供/确认参数'], P.external, 13.5, 11);
   b += arrow(cx, 612, cx, 636, '#546e7a');

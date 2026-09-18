@@ -3,6 +3,10 @@ package com.library.agent.healthcheck;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.library.agent.config.HealthCheckProperties.Target;
+import com.library.agent.tool.retry.DbRetryProperties;
+import com.library.agent.tool.retry.SqlRetryClassifier;
+import com.library.agent.tool.retry.SqlRetryExecutor;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -20,11 +24,19 @@ import java.util.Map;
  * 对单个目标实例建立短连接，采集一组与异常判定相关的关键指标
  * （活跃会话数、缓冲池命中率、锁等待会话数、死元组比例、后端写入占比、
  * 事务空闲未关闭连接数、复制延迟），供 LLM 巡检工具与规则兜底共用。
+ * <p>
+ * 连接类瞬时故障在本类内部退避重试并自愈，重试耗尽后才返回仅含 error 的 Map。
+ * 各子查询的 catch 必须先调用 {@link SqlRetryClassifier#rethrowIfConnectionLevel}，
+ * 否则连接中途断掉时会被降级成 -1/replicationError，定时巡检会把故障记成
+ * NORMAL/ANOMALY 而不是 ERROR。
  */
 @Component
+@RequiredArgsConstructor
 public class DatabaseMetricsCollector {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
+    private final DbRetryProperties retryProperties;
 
     @Value("${spring.datasource.username}")
     private String fallbackUsername;
@@ -33,12 +45,31 @@ public class DatabaseMetricsCollector {
     private String fallbackPassword;
 
     /**
-     * 采集指定实例的健康指标。
+     * 采集指定实例的健康指标，连接类瞬时故障在内部重试自愈。
+     * <p>
+     * beforeRetry 传空实现：本类走 DriverManager 短连接，每次尝试都新建连接，无池可清。
      *
      * @param target 巡检目标实例配置
      * @return 指标 Map，键为指标名，值为数值或错误说明；失败时返回仅含 error 的 Map
      */
     public Map<String, Object> collect(Target target) {
+        try {
+            SqlRetryExecutor executor = new SqlRetryExecutor(retryProperties);
+            return executor.execute("healthcheck-metrics", () -> collectOnce(target), () -> { });
+        } catch (Exception e) {
+            Map<String, Object> error = new LinkedHashMap<>();
+            error.put("error", "指标采集失败: " + e.getMessage());
+            return error;
+        }
+    }
+
+    /**
+     * 单次采集：建立短连接并逐个查询指标。任一子查询遇到连接级故障都会上抛，
+     * 由 {@link #collect} 的重试内核换一条新连接重跑。
+     *
+     * @throws Exception 连接级故障（重试内核会重试）或数据级故障（直接上抛给调用方）
+     */
+    private Map<String, Object> collectOnce(Target target) throws Exception {
         String url = "jdbc:postgresql://" + target.getHost() + ":" + target.getPort() + "/" + target.getDatabase();
         String username = isBlank(target.getUsername()) ? fallbackUsername : target.getUsername();
         String password = isBlank(target.getPassword()) ? fallbackPassword : target.getPassword();
@@ -53,10 +84,6 @@ public class DatabaseMetricsCollector {
             metrics.put("backendWriteRatio", queryBackendWriteRatio(conn));
             collectReplicationLag(conn, metrics);
             return metrics;
-        } catch (Exception e) {
-            Map<String, Object> error = new LinkedHashMap<>();
-            error.put("error", "指标采集失败: " + e.getMessage());
-            return error;
         }
     }
 
@@ -92,6 +119,7 @@ public class DatabaseMetricsCollector {
                 return rs.next() ? rs.getDouble(1) : -1;
             }
         } catch (Exception e) {
+            SqlRetryClassifier.rethrowIfConnectionLevel(e);
             return -1;
         }
     }
@@ -136,6 +164,7 @@ public class DatabaseMetricsCollector {
                 }
             }
         } catch (Exception e) {
+            SqlRetryClassifier.rethrowIfConnectionLevel(e);
             metrics.put("replicationError", e.getMessage());
         }
     }
@@ -149,6 +178,7 @@ public class DatabaseMetricsCollector {
             rs.next();
             return rs.getLong(1);
         } catch (Exception e) {
+            SqlRetryClassifier.rethrowIfConnectionLevel(e);
             return -1;
         }
     }
@@ -164,6 +194,7 @@ public class DatabaseMetricsCollector {
                 return rs.getLong(1);
             }
         } catch (Exception e) {
+            SqlRetryClassifier.rethrowIfConnectionLevel(e);
             return -1;
         }
     }
@@ -177,6 +208,7 @@ public class DatabaseMetricsCollector {
             rs.next();
             return rs.getDouble(1);
         } catch (Exception e) {
+            SqlRetryClassifier.rethrowIfConnectionLevel(e);
             return -1;
         }
     }

@@ -9,6 +9,8 @@ import tsr
 
 FLUSH_EVERY = 10
 
+JUDGE_TOOL_INPUT_LIMIT = 500
+
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
@@ -69,14 +71,38 @@ def summarize_trace(detail):
     }
 
 
-def judge_answer(agent, case, chat):
+def tool_calls_for_judge(detail):
+    calls = []
+    for call in (detail or {}).get("toolCalls") or []:
+        calls.append(
+            {
+                "toolName": call.get("toolName"),
+                "toolInput": truncate(call.get("toolInput"), JUDGE_TOOL_INPUT_LIMIT),
+                "success": call.get("success"),
+            }
+        )
+    return calls
+
+
+def truncate(text, limit):
+    if not text:
+        return text
+    return text if len(text) <= limit else text[:limit] + "...(truncated)"
+
+
+def judge_answer(agent, case, chat, detail):
     if not config.JUDGE_ENABLED:
         return None
     answer = (chat.get("answer") or "").strip()
     if not answer:
         return None
     try:
-        return agent.judge(case["query"], answer, case.get("key_points") or [])
+        return agent.judge(
+            case["query"],
+            answer,
+            case.get("key_points") or [],
+            tool_calls_for_judge(detail),
+        )
     except Exception as exc:
         print(f"    [judge] 打分失败：{exc}")
         return None
@@ -123,8 +149,8 @@ def evaluate_case(agent, case):
     chat = run_case(agent, case)
     trace_detail = agent.get_trace(chat["traceId"]) if chat.get("traceId") else None
     trace = (trace_detail or {}).get("trace") or {}
-    success, reason = tsr.judge_task_success(chat, trace)
-    judged = judge_answer(agent, case, chat)
+    success, reason = tsr.judge_task_success(case, chat, trace)
+    judged = judge_answer(agent, case, chat, trace_detail)
     payload = build_payload(case, chat, trace, success, reason, judged)
     return payload, build_detail(case, trace, trace_detail)
 

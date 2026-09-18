@@ -89,8 +89,8 @@
 
 | 测试集 | 建议规模 | 说明 |
 | --- | --- | --- |
-| 整体测评 `chat_cases` | ≥ 80 条 | 含知识问答、诊断、告警、纯闲聊/越界 |
-| 工具调用 `tool_cases` | ≥ 100 条 | 6 个工具 × 正例/硬负例/多工具/参数缺失 |
+| 整体测评 `chat_cases` | ≥ 80 条 | 含知识问答、诊断、告警、纯闲聊/越界；当前 `chat_cases_v3.jsonl` 为 123 条 |
+| 工具调用 `tool_cases` | ≥ 100 条 | 12 个数据库工具 × 正例/硬负例/多工具/参数缺失 |
 | RAG `rag_cases` | ≥ 100 条 | BEIR SciFact 全量 + 自建中文运维集 ≥ 50 条 |
 
 ### 3.3 工具调用用例模板（示例）
@@ -103,6 +103,43 @@
 ```
 
 > 工具 `name` 当前为 `@Tool` 注解的整句描述（LangChain4j 约定），比对时建议用**整句精确匹配**，同时在 harness 中维护「整句 ↔ 短名」映射表便于报告阅读。
+
+**`db_diagnosis` 诊断组用例要点**
+
+已在 `chat_cases_v3.jsonl` 落地 30 条（`diag_001`–`diag_030`）：
+单工具正例 13 条（6 个工具各自覆盖，`instance` 覆盖业务名与 `host:port` 两种写法）、
+链式下钻 8 条、参数缺失/实例不可达 4 条、写操作边界 4 条。
+
+除单工具正例外，该组需要专门覆盖**链式下钻**（ReAct 多步：先用总览类工具定位方向，再用专项工具取证据）：
+
+```json
+{"case_id":"tool_101","category":"chained_drilldown","query":"rag库 现在很卡，帮我看看是谁在锁表","expected_tools":["获取指定数据库当前的锁阻塞关系（阻塞方 pid/用户/应用/状态/事务已开启时长/backend_xmin/正在执行的 SQL、持有锁的模式与对象、是否链源头，以及等待方 pid/用户/状态/已等待时长/正在执行的 SQL、被该阻塞方挡住的会话数），用于定位锁等待的根因会话与长事务"],"expected_param_sources":{"getBlockingChains":{"instance":"EXPLICIT_CURRENT"}},"difficulty":"hard","notes":"业务名场景；instance 逐字出现在用户原话中"}
+{"case_id":"tool_102","category":"hard_negative","query":"你好，今天天气怎么样","expected_tools":[],"difficulty":"easy","notes":"不应误触发任何下钻工具"}
+```
+
+断言要点的口径（**不要断言来源必须是 `TOOL_OUTPUT`**）：
+
+- 后续步骤的 `argument_sources` 取值随参数值的来处而定：值逐字出现在用户原话里 → `EXPLICIT_CURRENT`
+  （`tool_101` 的 `instance=rag库` 即属此类，实测模型也是这么标的）；值来自上一步工具返回结果 → `TOOL_OUTPUT`。
+- 共同断言是**不得出现向用户追问实例/库名的澄清**，以及后续步骤确实调用了下钻工具。
+- 当前 6 个下钻工具的必填参数只有 `instance`，`database` 为可选（业务名场景自动回填）。
+  因此"值不在原话里"的真实窗口只有两种：模型在后续步骤显式带上取自上一步输出的 `database`，
+  或模型改用上一步回显的 `host:port` 形式调用。两者都由模型自主选择，端到端**不保证**出现
+  `TOOL_OUTPUT`——`TOOL_OUTPUT` 的放行/拒绝语义由 `ToolCallGuardTest` 与
+  `ToolCallingServiceGroundingTest` 的确定性单测覆盖，链路级用例只做"不追问 + 真调用"的弱断言。
+
+**`key_points` 必须写成条件式（被测库是安静库）**
+
+`rag_db` 是空库/无负载库，下钻工具常返回空结果。若 `key_points` 直接要求"给出 pid / 表名 / 延迟值"，
+模型如实说"没查到"就会被 Judge 判为不完整，逼出两种坏结果：模型编造数据，或诚实回答被扣分。
+因此该组每条都按「有数据 → 给出 X；无数据 → 如实说明没有，不得编造」的双分支写：
+
+```json
+{"key_points":["应调用锁阻塞下钻工具",
+  "若工具返回阻塞链，回答需给出阻塞方与等待方的 pid 及持锁对象；若返回为空，应如实说明当前没有检出锁阻塞，不得编造 pid 或持锁对象"]}
+```
+
+配合 Judge 侧「工具成功返回但结果为空属正常事实」的口径（见 4.1.4），"如实说没有"才不会被冤枉。
 
 ### 3.4 RAG 用例模板
 
@@ -191,8 +228,18 @@ AvgLatency = Σ trace.total_duration_ms / N
 QualityScore = Σ (维度得分 × 权重)          /* 归一化到 1~5，可再折算百分制 */
 ```
 
+**Judge 输入（`POST /eval/judge`）**：`query` / `answer` / `keyPoints` / `toolCalls`。
+`toolCalls` 是运行时从 `/agent/observability/traces/{traceId}` 采集的**实际工具调用序列**
+（`toolName` / `toolInput` / `success`），不是回答正文的转述。必须传该字段的原因：正文未必把
+调用细节写全，只有 `query+answer` 时 Judge 会凭散文推断，把"先下钻取证再作答"误判成"未调用工具"，
+系统性地压低诊断类用例的分数（v3 首次全量就踩到：`db_diagnosis` 组规则 TSR 100%，质量分仅 3.22）。
+
+rubric 中据此明确三条口径：**以工具调用清单为准**（不得仅凭正文推断调用与否）、
+**工具成功返回但结果为空属正常事实**（如实说"没查到"不算不完整、不算编造）、
+**清单为空却该取证作答则扣分**。改动 rubric 时同步递增 `EvalJudgeService.RUBRIC_VERSION`。
+
 **Judge 可靠性保障**：
-1. Judge Prompt 与 rubric **冻结版本化**，随测评结果一同记录。
+1. Judge Prompt 与 rubric **冻结版本化**，随测评结果一同记录（当前 `judge-rubric-v2`）。
 2. 抽检 **10%~20%** 用例做人工评分，计算 Judge vs 人工的 **Spearman 秩相关 / Cohen's Kappa**，低于阈值（κ<0.6）则修订 rubric。
 3. 关键用例支持 **pairwise 对比**（A/B 两版 Agent 输出，判优胜），比绝对打分更稳定。
 4. Judge 与 Agent 使用不同模型，避免同源偏差；同一用例可跑 3 次取均值降噪。
@@ -362,7 +409,7 @@ QualityScore = Σ (维度得分 × 权重)          /* 归一化到 1~5，可再
 | 冷启动 | 每次 run 前重启后端，或按时间窗过滤 trace |
 | 重复次数 | 关键指标跑 ≥ 3 次，报均值 ± 标准差 |
 | 环境 | 中间件（PG/ES/Redis/MinIO/RocketMQ）健康，知识库版本一致 |
-| 隔离 | 测评**不得触发真实写操作**：WRITE 工具（`resetSlowQueryStats` / `sendAlertEmail`）用测试收件人或 mock 端点 |
+| 隔离 | 测评**不得触发真实写操作**：WRITE 工具（`resetSlowQueryStats` / `sendAlertEmail`）用测试收件人或 mock 端点；`db_diagnosis` 诊断组新增的 6 个工具全部为只读，不涉及该清单 |
 
 ### 5.4 新增结果表设计（A3）
 
@@ -468,6 +515,14 @@ CREATE INDEX idx_eval_case_run ON agent_eval_case_result(run_id, case_id);
 | `getSqlExecutionPlan` | `instance`, `database`, `sql`, `mode` | `host:port`, 库名, SQL 文本, `estimated\|actual` | 否 |
 | `sendAlertEmail` | `instanceName`, `runId`, `subject`, `content` | 业务名, 运行ID, 主题, 正文 | **是** |
 | `getWeather` | `city` | 城市名 | 否 |
+| `listActiveSessions` | `instance`, `database`(选) | 业务名或 `host:port`, 库名 | 否 |
+| `getWaitEventDistribution` | `instance`, `database`(选) | 业务名或 `host:port`, 库名 | 否 |
+| `getBlockingChains` | `instance`, `database`(选) | 业务名或 `host:port`, 库名 | 否 |
+| `getReplicationStatus` | `instance`, `database`(选) | 业务名或 `host:port`, 库名 | 否 |
+| `getVacuumAndBloatStatus` | `instance`, `database`(选) | 业务名或 `host:port`, 库名 | 否 |
+| `getTableAccessStats` | `instance`, `database`(选) | 业务名或 `host:port`, 库名 | 否 |
+
+> 表末 6 行为 `db_diagnosis` 任务的下钻工具，全部**只读**。`instance` 同时接受巡检配置中的业务名（如 `rag库`）与 `host:port` 字面地址：用业务名时可省略 `database`（自动回填该实例配置的库名），用 `host:port` 时 `database` 必填。多步下钻时后续步骤的 `instance`/`database` 直接复用上一步的值，无需用户重复提供；`argument_sources` 按**值的实际来处**标注——值逐字在用户本轮原话里 → `EXPLICIT_CURRENT`，值取自本轮此前成功的工具返回结果 → `TOOL_OUTPUT`。
 
 ### 9.2 指标速查表
 

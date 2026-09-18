@@ -1,15 +1,10 @@
 package com.library.agent.tool;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.HikariDataSource;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
-import jakarta.annotation.PreDestroy;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.sql.Connection;
@@ -19,32 +14,15 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
+/**
+ * PostgreSQL SQL 执行计划（EXPLAIN）获取与分析工具。
+ * <p>
+ * 支持估算计划（estimated）与实际执行计划（actual）两种模式，
+ * 返回结构化执行计划 JSON 及全表扫描、连接方式等维度的初步分析结果。
+ */
 @Component
-public class SqlExecutionPlanTool {
-
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-
-    private final ConcurrentMap<String, HikariDataSource> poolCache = new ConcurrentHashMap<>();
-
-    @Value("${spring.datasource.username}")
-    private String dbUsername;
-
-    @Value("${spring.datasource.password}")
-    private String dbPassword;
-
-    @PreDestroy
-    public void closeAllPools() {
-        for (HikariDataSource ds : poolCache.values()) {
-            try {
-                ds.close();
-            } catch (Exception ignored) {
-            }
-        }
-        poolCache.clear();
-    }
+public class SqlExecutionPlanTool extends AbstractPostgresTool {
 
     @Tool("获取指定SQL语句在数据库中的优化器执行计划，支持estimated（估算计划）和actual（实际执行）两种模式，返回结构化JSON供Agent解读或进一步分析（如发现全表扫描、错误连接顺序等）")
     public String getSqlExecutionPlan(
@@ -53,12 +31,11 @@ public class SqlExecutionPlanTool {
             @P("需要获取执行计划的SQL语句，仅支持单条SELECT/INSERT/UPDATE/DELETE语句") String sql,
             @P("执行计划模式：estimated（估算计划，不实际执行SQL）或 actual（实际执行SQL并收集真实统计信息），默认为estimated") String mode) {
 
-        if (mode == null || mode.isBlank()) {
-            mode = "estimated";
-        }
+        /* 入参 mode 会被重新赋值、无法被 lambda 捕获，故先归一为不可变局部变量 */
+        String planMode = (mode == null || mode.isBlank()) ? "estimated" : mode;
 
-        if (!"estimated".equals(mode) && !"actual".equals(mode)) {
-            return errorJson("不支持的执行计划模式: " + mode + "，可选值为 estimated 或 actual");
+        if (!"estimated".equals(planMode) && !"actual".equals(planMode)) {
+            return errorJson("不支持的执行计划模式: " + planMode + "，可选值为 estimated 或 actual");
         }
 
         String sanitized = sanitizeSql(sql);
@@ -66,71 +43,44 @@ public class SqlExecutionPlanTool {
             return errorJson("SQL语句不合法：仅支持单条SELECT、INSERT、UPDATE、DELETE语句");
         }
 
-        if ("actual".equals(mode) && !isReadOnly(sanitized)) {
+        if ("actual".equals(planMode) && !isReadOnly(sanitized)) {
             return errorJson("actual 模式仅支持 SELECT 语句，INSERT/UPDATE/DELETE 请使用 estimated 模式");
         }
 
-        String poolKey = instance + "/" + database;
-        HikariDataSource ds = poolCache.computeIfAbsent(poolKey, k -> createPool(instance, database));
-        String explainSql = buildExplainSql(sanitized, mode);
+        String explainSql = buildExplainSql(sanitized, planMode);
 
-        try (Connection conn = ds.getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(explainSql)) {
+        return executeWithRetry(instance, database, "获取执行计划失败", conn -> {
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery(explainSql)) {
 
-            List<JsonNode> planNodes = new ArrayList<>();
-            while (rs.next()) {
-                JsonNode parsed = OBJECT_MAPPER.readTree(rs.getString(1));
-                if (parsed.isArray()) {
-                    for (JsonNode node : parsed) {
-                        planNodes.add(node);
+                List<JsonNode> planNodes = new ArrayList<>();
+                while (rs.next()) {
+                    JsonNode parsed = OBJECT_MAPPER.readTree(rs.getString(1));
+                    if (parsed.isArray()) {
+                        for (JsonNode node : parsed) {
+                            planNodes.add(node);
+                        }
+                    } else {
+                        planNodes.add(parsed);
                     }
-                } else {
-                    planNodes.add(parsed);
                 }
+
+                ObjectNode analysis = analyzePlan(planNodes);
+
+                ObjectNode result = baseResult(instance, database);
+                result.put("mode", planMode);
+                result.put("sql", sanitized);
+
+                ArrayNode planArray = OBJECT_MAPPER.createArrayNode();
+                for (JsonNode node : planNodes) {
+                    planArray.add(node);
+                }
+                result.set("plan", planArray);
+                result.set("analysis", analysis);
+
+                return OBJECT_MAPPER.writeValueAsString(result);
             }
-
-            ObjectNode analysis = analyzePlan(planNodes);
-
-            ObjectNode result = OBJECT_MAPPER.createObjectNode();
-            result.put("success", true);
-            result.put("instance", instance);
-            result.put("database", database);
-            result.put("mode", mode);
-            result.put("sql", sanitized);
-
-            ArrayNode planArray = OBJECT_MAPPER.createArrayNode();
-            for (JsonNode node : planNodes) {
-                planArray.add(node);
-            }
-            result.set("plan", planArray);
-            result.set("analysis", analysis);
-
-            return OBJECT_MAPPER.writeValueAsString(result);
-
-        } catch (Exception e) {
-            poolCache.remove(poolKey);
-            try {
-                ds.close();
-            } catch (Exception ignored) {
-            }
-            return errorJson("获取执行计划失败: " + e.getMessage());
-        }
-    }
-
-    private HikariDataSource createPool(String instance, String database) {
-        HikariConfig config = new HikariConfig();
-        config.setJdbcUrl("jdbc:postgresql://" + instance + "/" + database);
-        config.setUsername(dbUsername);
-        config.setPassword(dbPassword);
-        config.setDriverClassName("org.postgresql.Driver");
-        config.setMinimumIdle(0);
-        config.setMaximumPoolSize(2);
-        config.setIdleTimeout(300_000);
-        config.setMaxLifetime(600_000);
-        config.setConnectionTimeout(10_000);
-        config.addDataSourceProperty("socketTimeout", "20");
-        return new HikariDataSource(config);
+        });
     }
 
     private String buildExplainSql(String sql, String mode) {
@@ -256,12 +206,5 @@ public class SqlExecutionPlanTool {
                 collectPlanInfo(child, scanTypes, joinTypes, warnings);
             }
         }
-    }
-
-    private String errorJson(String message) {
-        ObjectNode error = OBJECT_MAPPER.createObjectNode();
-        error.put("success", false);
-        error.put("error", message);
-        return error.toString();
     }
 }

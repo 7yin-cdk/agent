@@ -1,22 +1,16 @@
 package com.library.agent.tool;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.HikariDataSource;
+import com.library.agent.tool.retry.SqlRetryClassifier;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
-import jakarta.annotation.PreDestroy;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 /**
  * PostgreSQL 数据库核心性能指标采集工具。
@@ -26,31 +20,7 @@ import java.util.concurrent.ConcurrentMap;
  * 采集实例级别和数据库级别的八项关键性能指标。
  */
 @Component
-public class DatabaseMetricsTool {
-
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-
-    /**
-     * 连接池缓存，key = "instance/database"，复用同一实例的连接池。
-     */
-    private final ConcurrentMap<String, HikariDataSource> poolCache = new ConcurrentHashMap<>();
-
-    @Value("${spring.datasource.username}")
-    private String dbUsername;
-
-    @Value("${spring.datasource.password}")
-    private String dbPassword;
-
-    @PreDestroy
-    public void closeAllPools() {
-        for (HikariDataSource ds : poolCache.values()) {
-            try {
-                ds.close();
-            } catch (Exception ignored) {
-            }
-        }
-        poolCache.clear();
-    }
+public class DatabaseMetricsTool extends AbstractPostgresTool {
 
     /**
      * 采集 PostgreSQL 数据库实例的八项核心性能指标。
@@ -71,16 +41,11 @@ public class DatabaseMetricsTool {
             return errorJson("数据库名称不能为空");
         }
 
-        HikariDataSource ds = getOrCreatePool(instance, database);
+        return executeWithRetry(instance, database, "指标采集失败", conn -> {
 
-        try (Connection conn = ds.getConnection()) {
+            ObjectNode result = baseResult(instance, database);
 
-            ObjectNode result = OBJECT_MAPPER.createObjectNode();
-            result.put("success", true);
-            result.put("instance", instance);
-            result.put("database", database);
-
-            // ---- 采集八项指标 ----
+            /* ---- 采集八项指标 ---- */
             collectActiveSessions(conn, database, result);
             collectBufferHitRate(conn, database, result);
             collectLockWaitingSessions(conn, result);
@@ -91,16 +56,7 @@ public class DatabaseMetricsTool {
             collectIdleInTransaction(conn, result);
 
             return OBJECT_MAPPER.writeValueAsString(result);
-
-        } catch (Exception e) {
-            // 连接异常时清理失效的连接池
-            poolCache.remove(poolKey(instance, database));
-            try {
-                ds.close();
-            } catch (Exception ignored) {
-            }
-            return errorJson("指标采集失败: " + e.getMessage());
-        }
+        });
     }
 
     // ======================== 八项指标采集方法 ========================
@@ -151,7 +107,7 @@ public class DatabaseMetricsTool {
                 }
             }
         } catch (Exception e) {
-            result.set("bufferHitRate", metricErrorNode("缓冲池命中率", e.getMessage()));
+            degradeMetric(e, "缓冲池命中率", result, "bufferHitRate");
         }
     }
 
@@ -207,7 +163,7 @@ public class DatabaseMetricsTool {
                 }
             }
         } catch (Exception e) {
-            result.set("transactionsPerSecond", metricErrorNode("每秒事务数", e.getMessage()));
+            degradeMetric(e, "每秒事务数", result, "transactionsPerSecond");
         }
     }
 
@@ -281,7 +237,7 @@ public class DatabaseMetricsTool {
 
             result.set("replicationLag", node);
         } catch (Exception e) {
-            result.set("replicationLag", metricErrorNode("主从复制延迟", e.getMessage()));
+            degradeMetric(e, "主从复制延迟", result, "replicationLag");
         }
     }
 
@@ -350,7 +306,7 @@ public class DatabaseMetricsTool {
 
             result.set("deadTupleRatio", node);
         } catch (Exception e) {
-            result.set("deadTupleRatio", metricErrorNode("死元组比例", e.getMessage()));
+            degradeMetric(e, "死元组比例", result, "deadTupleRatio");
         }
     }
 
@@ -390,7 +346,7 @@ public class DatabaseMetricsTool {
                 result.set("backendWriteRatio", node);
             }
         } catch (Exception e) {
-            result.set("backendWriteRatio", metricErrorNode("后端写入缓冲区占比", e.getMessage()));
+            degradeMetric(e, "后端写入缓冲区占比", result, "backendWriteRatio");
         }
     }
 
@@ -448,55 +404,22 @@ public class DatabaseMetricsTool {
             node.put(metricKey, value);
             result.set(metricKey, node);
         } catch (Exception e) {
-            result.set(metricKey, metricErrorNode(description, e.getMessage()));
+            degradeMetric(e, description, result, metricKey);
         }
-    }
-
-    // ======================== 连接池管理 ========================
-
-    /**
-     * 获取或创建指定实例/数据库的连接池。
-     * 每条连接池最多保留 2 个连接，空闲 5 分钟回收，最大存活 10 分钟。
-     */
-    private HikariDataSource getOrCreatePool(String instance, String database) {
-        String key = poolKey(instance, database);
-        return poolCache.computeIfAbsent(key, k -> createPool(instance, database));
-    }
-
-    /**
-     * 创建新的 HikariCP 连接池。
-     * <p>
-     * 使用 application.yml 中 spring.datasource.username / password 作为认证凭据。
-     */
-    private HikariDataSource createPool(String instance, String database) {
-        HikariConfig config = new HikariConfig();
-        config.setJdbcUrl("jdbc:postgresql://" + instance + "/" + database);
-        config.setUsername(dbUsername);
-        config.setPassword(dbPassword);
-        config.setDriverClassName("org.postgresql.Driver");
-        config.setMinimumIdle(0);
-        config.setMaximumPoolSize(2);
-        config.setIdleTimeout(300_000);
-        config.setMaxLifetime(600_000);
-        config.setConnectionTimeout(10_000);
-        config.addDataSourceProperty("socketTimeout", "20");
-        return new HikariDataSource(config);
-    }
-
-    private static String poolKey(String instance, String database) {
-        return instance + "/" + database;
     }
 
     // ======================== JSON 构建工具 ========================
 
     /**
-     * 构建采集失败的顶层 JSON。
+     * 单项指标失败时降级为局部错误节点。
+     * <p>
+     * 若失败源于连接本身不可用（连接中途断开、服务端重启等），则上抛给重试内核，
+     * 否则外层永远看不到异常，重试不会触发，大模型只会收到八条并行的错误节点。
+     * 数据级失败（SQL 语法、权限不足等）仍按原口径降级，不影响其余指标返回。
      */
-    private String errorJson(String message) {
-        ObjectNode root = OBJECT_MAPPER.createObjectNode();
-        root.put("success", false);
-        root.put("error", message);
-        return root.toString();
+    private void degradeMetric(Exception e, String metricName, ObjectNode result, String key) {
+        SqlRetryClassifier.rethrowIfConnectionLevel(e);
+        result.set(key, metricErrorNode(metricName, e.getMessage()));
     }
 
     /**

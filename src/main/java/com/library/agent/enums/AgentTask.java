@@ -20,7 +20,18 @@ public enum AgentTask {
     WEATHER_QUERY("weather_query", "查询城市实时天气，支持温度/风力/湿度/降雨等天气状况"),
     SQL_EXECUTION_PLAN("sql_execution_plan", "获取并分析 SQL 执行计划(EXPLAIN)，识别全表扫描/索引使用/连接方式与性能瓶颈"),
     DATABASE_METRICS("database_metrics", "采集数据库八项核心性能指标，用于健康巡检与性能诊断"),
+    DB_DIAGNOSIS("db_diagnosis", "排查数据库异常根因：活跃会话与等待事件、锁阻塞链、复制延迟与 WAL 槽保留、死元组与表膨胀、表访问与索引、慢查询下钻"),
     SLOW_QUERY("slow_query", "基于 pg_stat_statements 查询与解读 Top 10 慢查询并给出优化建议");
+
+    /**
+     * 路由输出的「无匹配任务」哨兵值。
+     * <p>
+     * 不是任务能力，因此不出现在 {@link #values()} 中，也不进入能力清单文案。
+     * 当用户请求既不属于任何已注册任务能力时（闲聊、通用常识、越界请求），
+     * 路由模型按 {@code RoutePrompt.md} 的约定输出该值；路由服务据此直接判定无匹配并短路，
+     * 不再纠错重试，最终回退到"无匹配能力"文案。
+     */
+    public static final String NO_MATCH = "NO_MATCH";
 
     private final String routeName;
     private final String description;
@@ -68,6 +79,18 @@ public enum AgentTask {
             }
         }
         return Optional.empty();
+    }
+
+    /**
+     * 判断路由输出是否为「无匹配任务」哨兵值。
+     * <p>
+     * 容忍首尾空格与大小写差异，便于解析模型偶发的 {@code no_match} 等写法。
+     *
+     * @param rawName LLM 路由输出的原始任务名
+     * @return 命中断言返回 {@code true}
+     */
+    public static boolean isNoMatch(String rawName) {
+        return rawName != null && NO_MATCH.equalsIgnoreCase(rawName.trim());
     }
 
     /**

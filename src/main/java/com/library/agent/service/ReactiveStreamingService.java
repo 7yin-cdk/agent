@@ -6,6 +6,7 @@ import com.library.agent.context.AgentChatContext;
 import com.library.agent.conversation.service.ConversationService;
 import com.library.agent.entity.AgentShortTermMemory;
 import com.library.agent.enums.IntentType;
+import com.library.agent.llm.LlmExhaustedException;
 import com.library.agent.llm.LlmService;
 import com.library.agent.llm.PromptBuilder;
 import com.library.agent.llm.QueryRewriteResult;
@@ -45,6 +46,8 @@ public class ReactiveStreamingService {
 
     private static final int ANSWER_HISTORY_LIMIT = 20;
     private static final int INTENT_HISTORY_LIMIT = 5;
+    /* 非 LLM 类的内部故障（检索、记忆、持久化等）对外的统一文案，技术细节只进日志与 trace */
+    private static final String GENERIC_ERROR_MESSAGE = "服务暂时不可用，请稍后再试。";
 
     private final LlmService llmService;
     private final RagService ragService;
@@ -86,8 +89,7 @@ public class ReactiveStreamingService {
                 }
             } catch (Exception e) {
                 log.error("Reactive chat failed, userId={}, convId={}", userId, conversationId, e);
-                sendEvent(emitter, "error",
-                        Map.of("message", e.getMessage() == null ? "Stream failed" : e.getMessage()));
+                sendEvent(emitter, "error", Map.of("message", userFacingMessage(e)));
                 try {
                     ConversationTraceCollector errCollector = new ConversationTraceCollector(userId, conversationId, query);
                     traceService.save(errCollector, "ERROR", e.getMessage());
@@ -102,6 +104,13 @@ public class ReactiveStreamingService {
         return emitter;
     }
 
+    /**
+     * 执行用户query请求
+     * @param userId 用户id
+     * @param conversationId 会话id
+     * @param query 用户输入的query
+     * @param emitter
+     */
     private void doChatAndStream(Long userId, String conversationId, String query, SseEmitter emitter) {
         /* 0. 创建可观测采集器 */
         ConversationTraceCollector collector = new ConversationTraceCollector(userId, conversationId, query);
@@ -304,6 +313,16 @@ public class ReactiveStreamingService {
         if (history == null || history.isEmpty()) return List.of();
         int from = Math.max(0, history.size() - INTENT_HISTORY_LIMIT);
         return history.subList(from, history.size());
+    }
+
+    /**
+     * 取对外的 error 事件文案。
+     * <p>
+     * LLM 链路耗尽时沿用编排器的统一友好文案；其余内部故障一律给通用文案。
+     * 原始异常文本只写日志与 trace 表，避免把鉴权、参数、SQL 等内部细节透传给前端。
+     */
+    private static String userFacingMessage(Exception e) {
+        return e instanceof LlmExhaustedException ? e.getMessage() : GENERIC_ERROR_MESSAGE;
     }
 
     private void sendEvent(SseEmitter emitter, String eventName, Object data) {

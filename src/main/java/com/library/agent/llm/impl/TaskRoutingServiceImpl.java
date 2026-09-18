@@ -22,6 +22,10 @@ import java.util.Optional;
  * 对输出做两层校验（PromptBuilder.extractRouteTask 语法解析 + AgentTask.fromRouteName 语义校验）。
  * 未命中时把"只能从合法清单中选"拼回提示再让 LLM 重选，直至达到最大调用次数；
  * 全部失败则返回"无匹配能力"回退文案，不执行、不猜测。
+ * <p>
+ * 模型若输出 {@link AgentTask#NO_MATCH} 哨兵值，表示请求确实不属于任何任务能力
+ * （闲聊、通用常识、越界请求）。这是合法结论而非无效输出，因此立即短路返回回退文案，
+ * 不消耗纠错重试次数。
  */
 @Slf4j
 @Service
@@ -66,6 +70,13 @@ public class TaskRoutingServiceImpl implements TaskRoutingService {
             routeAttempts.add(new RouteAttempt(prompt, result));
 
             lastExtractedName = PromptBuilder.extractRouteTask(result);
+
+            /* 模型主动声明无匹配任务：这是合法结论而非无效输出，立即短路，不再纠错重试 */
+            if (lastExtractedName.filter(AgentTask::isNoMatch).isPresent()) {
+                log.info("Route resolved no-match at attempt={}", attempt + 1);
+                return new RouteResolution(null, buildNoMatchMessage(), routeAttempts);
+            }
+
             Optional<AgentTask> matched = lastExtractedName.flatMap(AgentTask::fromRouteName);
             if (matched.isPresent()) {
                 log.info("Route resolved task={} attempts={}", matched.get().routeName(), attempt + 1);
@@ -100,7 +111,7 @@ public class TaskRoutingServiceImpl implements TaskRoutingService {
     }
 
     /**
-     * 纠错后缀：指出上一轮输出无效并硬性限定可选任务名。
+     * 纠错后缀：指出上一轮输出无效并硬性限定可选任务名（或无匹配哨兵值）。
      *
      * @param lastExtractedName 上一轮解析出的任务名；为空表示未能解析出有效 task
      */
@@ -112,6 +123,7 @@ public class TaskRoutingServiceImpl implements TaskRoutingService {
                 + "你上一轮的选择无效（" + invalidDesc + "）。忽略你此前的输出，重新从以下任务名中选择一个：\n"
                 + AgentTask.routeNamesText() + "\n"
                 + "要求：task 值必须与上述任务名完全一致（大小写敏感），禁止输出清单之外的任何新任务名。\n"
+                + "若该请求确实不属于上述任何任务能力，则输出 {\"task\":\"" + AgentTask.NO_MATCH + "\"}。\n"
                 + "只输出 JSON：{\"task\":\"<任务名>\"}，不要输出任何其他内容。";
     }
 

@@ -3,8 +3,9 @@ package com.library.agent.llm.impl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.library.agent.context.AgentChatContext;
-import com.library.agent.entity.AgentShortTermMemory;
+import com.library.agent.llm.LlmExhaustedException;
 import com.library.agent.llm.ToolCallingService;
+import com.library.agent.llm.resilience.ChatModelFailoverOrchestrator;
 import com.library.agent.observability.ConversationTraceCollector;
 import com.library.agent.tool.ToolAccess;
 import dev.langchain4j.agent.tool.Tool;
@@ -14,7 +15,6 @@ import dev.langchain4j.agent.tool.ToolSpecifications;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.service.tool.DefaultToolExecutor;
@@ -48,11 +48,26 @@ public class ToolCallingServiceImpl implements ToolCallingService {
 
     private static final int MAX_REACT_STEPS = 10;
     private static final int MAX_CONSECUTIVE_TOOL_FAILURES = 3;
+    /* 连续“工具调用被校验拦下”的次数上限：超过则放弃自纠错，返回面向用户的兜底文案 */
+    private static final int MAX_CONSECUTIVE_GUARD_REJECTIONS = 3;
     private static final int REACT_HISTORY_LIMIT = 8;
+
+    /**
+     * 校验连续拦截且模型始终未能补齐参数时的兜底文案。
+     * <p>
+     * 不复用 {@link #validateToolAction} 的纠正文案：后者面向模型，含“参数来源标注”等内部措辞，
+     * 直接返回给用户既泄露实现细节又不构成可执行答复。
+     */
+    private static final String GUARD_REJECTION_FALLBACK_MESSAGE =
+            "抱歉，我没有执行任何工具或数据库操作：本次请求缺少完成任务所必需的参数信息。"
+                    + "请补充说明要操作的目标（例如实例与库名）后重试。";
+    /* TOOL_OUTPUT 落字校验用的历史工具输出拼接上限，防止超长 observation 撑大校验开销 */
+    private static final int MAX_TOOL_OUTPUT_TEXT_LENGTH = 20000;
     private static final String APPLICATION_PACKAGE_PREFIX = "com.library.agent";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-    /* ReAct 使用 langchain4j ChatModel（对应百炼配置），provider 固定为 bailian */
+    /* ReAct 使用 langchain4j ChatModel（对应百炼配置）；以下标识仅用于 trace 展示主模型，
+     * 容错编排器降级到备用模型时该标识不代表实际命中的模型 */
     private static final String REACT_PROVIDER = "bailian";
 
     @Value("${agent.tool.timeout-seconds:30}")
@@ -71,7 +86,7 @@ public class ToolCallingServiceImpl implements ToolCallingService {
         return t;
     });
 
-    private final ChatModel chatModel;
+    private final ChatModelFailoverOrchestrator chatOrchestrator;
     private final ApplicationContext applicationContext;
 
     private final Map<String, RegisteredTool> registeredTools = new LinkedHashMap<>();
@@ -137,12 +152,13 @@ public class ToolCallingServiceImpl implements ToolCallingService {
     @Override
     public String chatWithTasks(AgentChatContext context, String reactPrompt) {
         if (registeredTools.isEmpty()) {
-            return chatModel.chat(userQuestion(context, reactPrompt));
+            return chatSingleUserMessage(userQuestion(context, reactPrompt));
         }
         List<ReActStep> steps = new ArrayList<>();
         Object memoryId = context == null ? null : context.getConversationId();
         String lastFailedToolName = null;
         int sameToolConsecutiveFailures = 0;
+        int consecutiveGuardRejections = 0;
         /* 严格落字校验开关与用户本轮原话：用户对话链路开启，自动巡检（HealthCheckRunner）关闭 */
         boolean strict = context != null && context.isGroundingEnabled();
         String userQuery = userQuestion(context, reactPrompt);
@@ -154,7 +170,7 @@ public class ToolCallingServiceImpl implements ToolCallingService {
                 String finalPrompt = reactPrompt.replace("{{react_history}}", builder.toString());
                 log.info("ReAct step={} input length={}", stepNumber, finalPrompt.length());
 
-                ChatResponse response = chatModel.chat(ChatRequest.builder()
+                ChatResponse response = chatOrchestrator.chat(ChatRequest.builder()
                         .messages(buildReActMessages(finalPrompt))
                         .build());
 
@@ -188,11 +204,21 @@ public class ToolCallingServiceImpl implements ToolCallingService {
                             ? "Tool task finished, but no answer was returned." : answer;
                 }
 
-                ToolCallValidationResult validationResult =
-                        validateToolAction(decision.tool(), userQuery, strict);
+                ToolCallValidationResult validationResult = validateToolAction(
+                        decision.tool(), userQuery, strict, successfulObservationText(steps));
                 if (!validationResult.ok()) {
-                    return validationResult.message();
+                    log.warn("ReAct step={} tool={} rejected before execution: {}", stepNumber,
+                            decision.tool().name(), validationResult.message());
+                    consecutiveGuardRejections++;
+                    if (consecutiveGuardRejections >= MAX_CONSECUTIVE_GUARD_REJECTIONS) {
+                        return GUARD_REJECTION_FALLBACK_MESSAGE;
+                    }
+                    steps.add(new ReActStep(stepNumber, "Tool action rejected before execution",
+                            decision.tool(), new ReActObservation(false, null,
+                            buildGuardCorrection(validationResult.message()))));
+                    continue;
                 }
+                consecutiveGuardRejections = 0;
 
                 ToolExecutionRequest toolRequest = toToolExecutionRequest(decision.tool());
                 ReActObservation observation = executeTool(toolRequest, memoryId);
@@ -215,6 +241,11 @@ public class ToolCallingServiceImpl implements ToolCallingService {
                     lastFailedToolName = null;
                     sameToolConsecutiveFailures = 0;
                 }
+            } catch (LlmExhaustedException e) {
+                /* 全部模型重试/降级耗尽：直接返回友好文案，不再消耗剩余步骤预算，
+                 * 避免烧完 10 步后返回"请描述清楚"这类把故障归咎于用户的误导提示 */
+                log.error("ReAct step={} LLM exhausted, abort", stepNumber, e);
+                return LlmExhaustedException.USER_FACING_MESSAGE;
             } catch (Exception e) {
                 log.error("ReAct step {} failed", stepNumber, e);
             }
@@ -232,12 +263,13 @@ public class ToolCallingServiceImpl implements ToolCallingService {
     public String chatWithTasks(AgentChatContext context, String reactPrompt,
                                 ConversationTraceCollector collector) {
         if (registeredTools.isEmpty()) {
-            return chatModel.chat(userQuestion(context, reactPrompt));
+            return chatSingleUserMessage(userQuestion(context, reactPrompt));
         }
         List<ReActStep> steps = new ArrayList<>();
         Object memoryId = context == null ? null : context.getConversationId();
         String lastFailedToolName = null;
         int sameToolConsecutiveFailures = 0;
+        int consecutiveGuardRejections = 0;
         /* 严格落字校验开关与用户本轮原话：用户对话链路开启，自动巡检（HealthCheckRunner）关闭 */
         boolean strict = context != null && context.isGroundingEnabled();
         String userQuery = userQuestion(context, reactPrompt);
@@ -251,7 +283,7 @@ public class ToolCallingServiceImpl implements ToolCallingService {
 
                 /* LLM 调用 */
                 long llmStart = System.currentTimeMillis();
-                ChatResponse response = chatModel.chat(ChatRequest.builder()
+                ChatResponse response = chatOrchestrator.chat(ChatRequest.builder()
                         .messages(buildReActMessages(finalPrompt))
                         .build());
                 long llmDuration = System.currentTimeMillis() - llmStart;
@@ -288,11 +320,22 @@ public class ToolCallingServiceImpl implements ToolCallingService {
                             ? "Tool task finished, but no answer was returned." : answer;
                 }
 
-                ToolCallValidationResult validationResult =
-                        validateToolAction(decision.tool(), userQuery, strict);
+                ToolCallValidationResult validationResult = validateToolAction(
+                        decision.tool(), userQuery, strict, successfulObservationText(steps));
                 if (!validationResult.ok()) {
-                    return validationResult.message();
+                    /* 被拦下的动作不计入工具调用记录（工具并未执行），只作为失败 observation 回灌模型 */
+                    log.warn("ReAct step={} tool={} rejected before execution: {}", stepNumber,
+                            decision.tool().name(), validationResult.message());
+                    consecutiveGuardRejections++;
+                    if (consecutiveGuardRejections >= MAX_CONSECUTIVE_GUARD_REJECTIONS) {
+                        return GUARD_REJECTION_FALLBACK_MESSAGE;
+                    }
+                    steps.add(new ReActStep(stepNumber, "Tool action rejected before execution",
+                            decision.tool(), new ReActObservation(false, null,
+                            buildGuardCorrection(validationResult.message()))));
+                    continue;
                 }
+                consecutiveGuardRejections = 0;
 
                 /* 工具调用 */
                 ToolExecutionRequest toolRequest = toToolExecutionRequest(decision.tool());
@@ -324,12 +367,30 @@ public class ToolCallingServiceImpl implements ToolCallingService {
                     lastFailedToolName = null;
                     sameToolConsecutiveFailures = 0;
                 }
+            } catch (LlmExhaustedException e) {
+                /* 全部模型重试/降级耗尽：直接返回友好文案，不再消耗剩余步骤预算，
+                 * 避免烧完 10 步后返回"请描述清楚"这类把故障归咎于用户的误导提示 */
+                log.error("ReAct step={} LLM exhausted, abort", stepNumber, e);
+                return LlmExhaustedException.USER_FACING_MESSAGE;
             } catch (Exception e) {
                 log.error("ReAct step {} failed", stepNumber, e);
             }
         }
 
         return "Too many ReAct steps. Please provide clearer conditions and try again.";
+    }
+
+    /**
+     * 单条 user 消息的对话调用（等价于 langchain4j {@code ChatModel.chat(String)} 语义）。
+     * <p>
+     * 经容错编排器发起，从而获得与主链路一致的重试、降级备用模型与熔断能力；
+     * 模型全部不可用时抛 {@code LlmExhaustedException}，由调用方决定兜底文案。
+     */
+    private String chatSingleUserMessage(String text) {
+        ChatResponse response = chatOrchestrator.chat(ChatRequest.builder()
+                .messages(UserMessage.from(text))
+                .build());
+        return response.aiMessage() == null ? null : response.aiMessage().text();
     }
 
     private List<ChatMessage> buildReActMessages(String reactPrompt) {
@@ -343,128 +404,6 @@ public class ToolCallingServiceImpl implements ToolCallingService {
                         """),
                 UserMessage.from(reactPrompt)
         );
-    }
-
-    private String buildReActPrompt(AgentChatContext context, String prompt, List<ReActStep> steps) {
-        StringBuilder builder = new StringBuilder();
-        builder.append("### Task\n");
-        builder.append("Decide the next ReAct step for the user request.Tools can only be invoked with parameters explicitly provided by the user.\n\n");
-
-        builder.append("### Current user question\n");
-        builder.append(userQuestion(context, prompt)).append("\n\n");
-
-        builder.append("### Conversation summary\n");
-        String conversationSummary = context == null ? null : context.getConversationSummary();
-        builder.append(conversationSummary == null || conversationSummary.isBlank() ? "None" : conversationSummary.trim()).append("\n\n");
-
-        builder.append("### Recent conversation history\n");
-        appendHistory(builder, context == null ? null : context.getHistoryMessages());
-
-        builder.append("### Available tools\n");
-        appendToolCatalog(builder);
-
-        builder.append("### ReAct history\n");
-        appendReActHistory(builder, steps);
-
-        builder.append("### Required output JSON\n");
-        builder.append("""
-                Return exactly one JSON object using one of these two forms.
-
-                Tool action:
-                {
-                  "type": "tool",
-                  "thought": "brief reason for the next action",
-                  "tool": {
-                    "name": "registered tool name",
-                    "arguments": {
-                      "argumentName": "argumentValue"
-                    },
-                    "argument_sources": {
-                      "argumentName": "EXPLICIT_CURRENT or REFERENCED_CURRENT or HISTORY_ONLY"
-                    }
-                  },
-                  "finish": null
-                }
-
-                Final answer:
-                {
-                  "type": "finish",
-                  "thought": "brief reason why the task can be finished",
-                  "tool": null,
-                  "finish": {
-                    "answer": "final answer to the user"
-                  }
-                }
-
-Rules:
-- Use type=tool when a registered tool is needed.
-- Use type=finish when enough information is available, or when required parameters are missing and the user must clarify.
-- tool.name must be one of Available tools.
-- tool.arguments must match the selected tool schema.
-- Every key in tool.arguments must have the same key in tool.argument_sources.
-
-- Each argument source must be exactly one of:
-  - EXPLICIT_CURRENT
-  - REFERENCED_CURRENT
-  - HISTORY_ONLY
-
-- Use EXPLICIT_CURRENT when the argument value is explicitly stated in the Current user question.
-
-- Use REFERENCED_CURRENT when the argument value is not explicitly stated, but the Current user question contains a reference, pronoun, or other expression that clearly refers to the value.
-  Examples:
-  - History: "北京天气怎么样"
-    Current: "那它明天呢"
-    city -> REFERENCED_CURRENT
-  - History: "介绍一下Spring Boot"
-    Current: "它有什么优缺点"
-    topic -> REFERENCED_CURRENT
-
-- Use HISTORY_ONLY when the argument value is not mentioned or referenced in the Current user question and can only be obtained from Conversation summary or Recent conversation history.
-
-- A parameter is considered provided by the user in the current turn if its source is EXPLICIT_CURRENT or REFERENCED_CURRENT.
-
-- A parameter is NOT considered provided by the user in the current turn if its source is HISTORY_ONLY.
-
-- If any required tool parameter is HISTORY_ONLY, do not invoke the tool. Instead, use type=finish and ask the user to explicitly provide or confirm the missing parameter.
-
-- Do not include markdown fences or text outside the JSON object.
-                """);
-        return builder.toString();
-    }
-
-    private void appendHistory(StringBuilder builder, List<AgentShortTermMemory> historyMessages) {
-        List<AgentShortTermMemory> limitedHistory = limitHistory(historyMessages);
-        if (limitedHistory.isEmpty()) {
-            builder.append("None\n\n");
-            return;
-        }
-
-        for (AgentShortTermMemory message : limitedHistory) {
-            if (message == null || message.getContent() == null || message.getContent().isBlank()) {
-                continue;
-            }
-            builder.append("- ")
-                    .append(normalizeRole(message.getRole()))
-                    .append(": ")
-                    .append(message.getContent().trim())
-                    .append("\n");
-        }
-        builder.append("\n");
-    }
-
-    private void appendToolCatalog(StringBuilder builder) {
-        if (registeredTools.isEmpty()) {
-            builder.append("None\n\n");
-            return;
-        }
-
-        for (RegisteredTool registeredTool : registeredTools.values()) {
-            ToolSpecification specification = registeredTool.specification();
-            builder.append("- name: ").append(specification.name()).append("\n");
-            builder.append("  description: ").append(specification.description()).append("\n");
-            builder.append("  schema: ").append(specification.toJson()).append("\n");
-        }
-        builder.append("\n");
     }
 
     private void appendReActHistory(StringBuilder builder, List<ReActStep> steps) {
@@ -557,16 +496,19 @@ Rules:
      * 结构性错误（不可解析、键不一致、非法来源枚举）立即拒绝；对必填参数，
      * 在严格落字校验（strict=true，用户对话链路）下依据
      * {@link ToolCallGuard}：参数值须出现在用户本轮原话，写工具不允许按指代放行，
-     * 只读工具的指代参数在候选唯一且与选中值一致时方可放行。所有“需用户澄清/补齐”
-     * 的问题聚合成一条消息返回，避免多参数时反复追问。
+     * 只读工具的指代参数在候选唯一且与选中值一致时方可放行，
+     * 只读工具的 TOOL_OUTPUT 参数须落字于本轮此前成功工具的返回结果（支持链式下钻）。
+     * 所有“需用户澄清/补齐”的问题聚合成一条消息返回，避免多参数时反复追问。
      *
-     * @param action    LLM 输出的工具调用
-     * @param userQuery 用户本轮原话，用于落字校验
-     * @param strict    是否启用严格落字校验（自动巡检链路为 false，维持旧语义）
+     * @param action          LLM 输出的工具调用
+     * @param userQuery       用户本轮原话，用于落字校验
+     * @param strict          是否启用严格落字校验（自动巡检链路为 false，维持旧语义）
+     * @param priorToolOutput 本轮此前成功工具调用的输出拼接文本，供 TOOL_OUTPUT 来源校验
      */
     private ToolCallValidationResult validateToolAction(ReActToolAction action,
                                                         String userQuery,
-                                                        boolean strict) {
+                                                        boolean strict,
+                                                        String priorToolOutput) {
 
         /* 1. Tool Action不能为空 */
         if (action == null) {
@@ -630,12 +572,13 @@ Rules:
             /* source必须是合法枚举值 */
             if (!source.equals("EXPLICIT_CURRENT")
                     && !source.equals("REFERENCED_CURRENT")
+                    && !source.equals(ToolCallGuard.SOURCE_TOOL_OUTPUT)
                     && !source.equals("HISTORY_ONLY")) {
                 return ToolCallValidationResult.reject(
                         "Invalid argument source for parameter: "
                                 + requiredArgument
                                 + ". Allowed values are "
-                                + "[EXPLICIT_CURRENT, REFERENCED_CURRENT, HISTORY_ONLY]."
+                                + "[EXPLICIT_CURRENT, REFERENCED_CURRENT, TOOL_OUTPUT, HISTORY_ONLY]."
                 );
             }
 
@@ -646,7 +589,7 @@ Rules:
 
             String ask = ToolCallGuard.evaluate(
                     strict, access, source, requiredArgument, valueText,
-                    userQuery, candidatesFor(requiredArgument, candidateSources));
+                    userQuery, candidatesFor(requiredArgument, candidateSources), priorToolOutput);
             if (ask != null) {
                 asks.add(ask);
             }
@@ -694,6 +637,24 @@ Rules:
             log.warn("Failed to parse tool.argument_candidates, degraded to empty: {}", json);
             return OBJECT_MAPPER.createObjectNode();
         }
+    }
+
+    /**
+     * 把校验拦截信息包装成回灌给模型的失败 observation。
+     * <p>
+     * 校验消息本身面向模型（含“参数来源标注”等内部措辞），只能进 ReAct 历史，不能作为用户回答；
+     * 这里补上明确的后续动作指引：要么按用户本轮原话补齐参数后重试，要么改用 finish 向用户追问，
+     * 严禁编造取值。措辞与解析失败分支的 observation 保持一致，均为英文。
+     *
+     * @param rejectMessage {@link #validateToolAction} 返回的拦截原因
+     * @return 供模型阅读的纠正说明
+     */
+    private String buildGuardCorrection(String rejectMessage) {
+        return rejectMessage + "\n"
+                + "The tool call was NOT executed. Do one of the following instead: "
+                + "(a) call the tool again with every required argument grounded in the user's current message, "
+                + "(b) output a finish action whose answer asks the user for the missing value in plain language. "
+                + "Never invent or guess an argument value.";
     }
 
     private String missingArgumentMessage(String argumentName) {
@@ -816,25 +777,35 @@ Rules:
         return prompt == null ? "" : prompt.trim();
     }
 
-    private List<AgentShortTermMemory> limitHistory(List<AgentShortTermMemory> historyMessages) {
-        if (historyMessages == null || historyMessages.isEmpty()) {
-            return List.of();
+    /**
+     * 汇总本轮此前“成功”工具调用的输出内容，供 TOOL_OUTPUT 落字校验使用。
+     * <p>
+     * 只取 {@code observation.success()} 为真且 content 非空的步骤，因此失败的调用
+     * 永远无法为后续参数背书；仅回看最近 {@link #REACT_HISTORY_LIMIT} 步，并设总长上限，
+     * 避免超长 observation 拼成巨型字符串反复参与子串匹配。
+     *
+     * @param steps 本轮 ReAct 步骤列表
+     * @return 拼接后的输出文本；无可用输出时返回空串
+     */
+    private String successfulObservationText(List<ReActStep> steps) {
+        if (steps == null || steps.isEmpty()) {
+            return "";
         }
-        int fromIndex = Math.max(0, historyMessages.size() - REACT_HISTORY_LIMIT);
-        return historyMessages.subList(fromIndex, historyMessages.size());
-    }
-
-    private String normalizeRole(String role) {
-        if (role == null || role.isBlank()) {
-            return "unknown";
+        int fromIndex = Math.max(0, steps.size() - REACT_HISTORY_LIMIT);
+        StringBuilder builder = new StringBuilder();
+        for (int i = fromIndex; i < steps.size(); i++) {
+            ReActObservation observation = steps.get(i).observation();
+            if (observation == null || !observation.success() || observation.content() == null) {
+                continue;
+            }
+            if (builder.length() >= MAX_TOOL_OUTPUT_TEXT_LENGTH) {
+                break;
+            }
+            builder.append(observation.content()).append('\n');
         }
-        return switch (role.trim().toLowerCase()) {
-            case "user" -> "user";
-            case "assistant" -> "assistant";
-            case "tool" -> "tool";
-            case "system" -> "system";
-            default -> role.trim();
-        };
+        return builder.length() > MAX_TOOL_OUTPUT_TEXT_LENGTH
+                ? builder.substring(0, MAX_TOOL_OUTPUT_TEXT_LENGTH)
+                : builder.toString();
     }
 
     private String extractJsonObject(String text) {

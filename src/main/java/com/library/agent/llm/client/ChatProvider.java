@@ -18,6 +18,20 @@ public record ChatProvider(String name, String chatUrl, String apiKey, String mo
         return name + "/" + model;
     }
 
+    /**
+     * 归一化后的 base URL（剥掉 {@code /chat/completions} 后缀）。
+     * <p>
+     * langchain4j 的 {@code OpenAiChatModel.baseUrl} 需要 base 形态，由其自行拼接端点路径；
+     * 而本 record 的 chatUrl 是完整端点形态。此处复用同一份归一化结果反推，
+     * 避免在配置里再维护一个可能与 chat-url 漂移的 base-url 属性。
+     *
+     * @return base URL，如 https://dashscope.aliyuncs.com/compatible-mode/v1
+     */
+    public String baseUrl() {
+        String suffix = "/chat/completions";
+        return chatUrl.endsWith(suffix) ? chatUrl.substring(0, chatUrl.length() - suffix.length()) : chatUrl;
+    }
+
     /* 归一化：去除末尾斜杠后补全 /chat/completions */
     private static String normalizeChatCompletionsUrl(String base) {
         String value = base == null ? "" : base.trim();

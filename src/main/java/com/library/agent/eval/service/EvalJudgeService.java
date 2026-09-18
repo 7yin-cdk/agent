@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.library.agent.eval.dto.EvalJudgeRequest;
 import com.library.agent.eval.dto.EvalJudgeResponse;
+import com.library.agent.eval.dto.EvalJudgeToolCall;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
@@ -44,7 +45,7 @@ public class EvalJudgeService {
     /**
      * rubric 版本号；提示词改动时必须同步递增，否则历史批次分数不可比
      */
-    public static final String RUBRIC_VERSION = "judge-rubric-v1";
+    public static final String RUBRIC_VERSION = "judge-rubric-v2";
 
     /**
      * 六维权重：正确性 / 完整性 / 可操作性 / 相关性 / 安全 / 格式
@@ -113,7 +114,7 @@ public class EvalJudgeService {
     }
 
     /**
-     * 渲染 rubric 模板：填入问题、回答与参考要点。
+     * 渲染 rubric 模板：填入问题、回答、参考要点与 Agent 实际发生的工具调用序列。
      */
     private String buildPrompt(EvalJudgeRequest request) {
         String answer = request.getAnswer() == null || request.getAnswer().isBlank()
@@ -123,7 +124,37 @@ public class EvalJudgeService {
         return rubricTemplate
                 .replace("{{query}}", request.getQuery())
                 .replace("{{answer}}", answer)
-                .replace("{{key_points}}", keyPoints);
+                .replace("{{key_points}}", keyPoints)
+                .replace("{{tool_calls}}", renderToolCalls(request.getToolCalls()));
+    }
+
+    /**
+     * 把工具调用序列渲染成逐行清单；无调用时给出明确说明，
+     * 避免 Judge 在空输入下自行猜测。
+     *
+     * @param toolCalls Agent 实际执行的工具调用；可为 null
+     * @return 供 rubric 直接展示的多行文本
+     */
+    private String renderToolCalls(List<EvalJudgeToolCall> toolCalls) {
+        if (toolCalls == null || toolCalls.isEmpty()) {
+            return "（本次回答未经过任何工具调用）";
+        }
+
+        StringBuilder builder = new StringBuilder();
+        int index = 0;
+        for (EvalJudgeToolCall call : toolCalls) {
+            index++;
+            String name = call == null || call.getToolName() == null || call.getToolName().isBlank()
+                    ? "（未记录工具名）" : call.getToolName();
+            String input = call == null || call.getToolInput() == null || call.getToolInput().isBlank()
+                    ? "（无入参）" : call.getToolInput();
+            boolean success = call != null && Boolean.TRUE.equals(call.getSuccess());
+            builder.append(index).append(". ").append(name)
+                    .append(" | 入参: ").append(input)
+                    .append(" | 结果: ").append(success ? "成功" : "失败")
+                    .append('\n');
+        }
+        return builder.toString().stripTrailing();
     }
 
     /**

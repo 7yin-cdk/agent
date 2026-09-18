@@ -74,6 +74,7 @@ public class AgentReactiveController {
         if (resolvedConvId == null || resolvedConvId.isBlank()) {
             CreateConversationRequest req = new CreateConversationRequest();
             String title = resolvedQuery.trim();
+            //新会话的标题名为用户第一个query的前二十个字符
             req.setTitle(title.length() <= 20 ? title : title.substring(0, 20));
             ConversationResponse conv = conversationService.createConversation(req);
             resolvedConvId = conv.getConversationId();

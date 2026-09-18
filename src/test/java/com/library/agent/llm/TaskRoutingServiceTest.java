@@ -77,6 +77,45 @@ class TaskRoutingServiceTest {
     }
 
     @Test
+    void noMatchSentinelShortCircuitsWithoutRetry() {
+        llmService.push("{\"task\":\"" + AgentTask.NO_MATCH + "\"}");
+        CountingCollector collector = new CountingCollector(3L, "conv-3", "你好");
+
+        TaskRoutingService.RouteResolution resolution = service.resolve(context("你好"), collector);
+
+        assertFalse(resolution.matched(), "哨兵值应判定为无匹配");
+        assertEquals(1, resolution.attempts().size(), "无匹配是合法结论，不应再纠错重试");
+        assertEquals(1, collector.count(), "首轮无匹配只应产生一次路由调用");
+        assertTrue(resolution.noMatchMessage().contains("未能从现有能力中匹配到可执行模块"),
+                "无匹配应返回回退文案");
+    }
+
+    @Test
+    void noMatchSentinelToleratesCaseAndWhitespace() {
+        llmService.push("{\"task\":\"  no_match  \"}");
+
+        TaskRoutingService.RouteResolution resolution = service.resolve(context("谢谢"));
+
+        assertFalse(resolution.matched(), "应容忍大小写与首尾空格");
+        assertEquals(1, resolution.attempts().size());
+    }
+
+    @Test
+    void retryCanConcludeNoMatch() {
+        llmService.push(
+                "{\"task\":\"code_generation\"}",
+                "{\"task\":\"" + AgentTask.NO_MATCH + "\"}"
+        );
+
+        TaskRoutingService.RouteResolution resolution = service.resolve(context("帮我写一首诗"));
+
+        assertFalse(resolution.matched(), "纠错轮改判无匹配应生效");
+        assertEquals(2, resolution.attempts().size());
+        assertTrue(resolution.attempts().get(1).prompt().contains(AgentTask.NO_MATCH),
+                "纠错轮提示应告知可以输出无匹配哨兵值");
+    }
+
+    @Test
     void firstAttemptValidShortCircuits() {
         llmService.push("{\"task\":\"database_metrics\"}");
         CountingCollector collector = new CountingCollector(2L, "conv-2", "采集指标");

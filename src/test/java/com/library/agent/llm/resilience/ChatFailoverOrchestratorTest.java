@@ -24,7 +24,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * 编排器三级容错单测（mock 客户端，不联网）：
- * 降级顺序、provider 内重试、确定性错误不重试、耗尽兜底文案、流式首 token 语义。
+ * 降级顺序、provider 内重试、确定性错误不重试也不降级、耗尽兜底文案、流式首 token 语义。
  */
 class ChatFailoverOrchestratorTest {
 
@@ -91,12 +91,12 @@ class ChatFailoverOrchestratorTest {
     }
 
     @Test
-    void deterministicErrorDoesNotRetryButFallsBack() {
+    void deterministicErrorDoesNotRetryOrFallBack() {
         ChatProvider deepseek = provider("deepseek");
         ChatProvider bailian = provider("bailian");
         OpenAiChatClient client = mock(OpenAiChatClient.class);
 
-        /* 400 属确定性错误：同一 provider 内不应重试，但允许切到备用 */
+        /* 400/401 属确定性错误：换 provider 只会原样复现，故不重试也不降级，立即上抛友好文案 */
         when(client.chat(eq(deepseek), eq(SYSTEM), eq(USER)))
                 .thenThrow(new LlmCallException("bad request", false, 400));
         when(client.chat(eq(bailian), eq(SYSTEM), eq(USER)))
@@ -104,12 +104,31 @@ class ChatFailoverOrchestratorTest {
 
         ChatFailoverOrchestrator orchestrator =
                 orchestrator(client, List.of(deepseek, bailian), 2);
-        ChatOutcome outcome = orchestrator.chat(SYSTEM, USER);
 
-        assertEquals("answer-from-bailian", outcome.result().content());
-        assertEquals("bailian/model-bailian", outcome.provider().displayName());
+        LlmExhaustedException ex = assertThrows(LlmExhaustedException.class,
+                () -> orchestrator.chat(SYSTEM, USER));
+        assertTrue(ex.getMessage().contains("暂时不可用"));
+        assertTrue(ex.getCause() instanceof LlmCallException);
         verify(client, times(1)).chat(eq(deepseek), eq(SYSTEM), eq(USER));
-        verify(client, times(1)).chat(eq(bailian), eq(SYSTEM), eq(USER));
+        verify(client, never()).chat(eq(bailian), eq(SYSTEM), eq(USER));
+    }
+
+    @Test
+    void authErrorDoesNotRetryOrFallBack() {
+        ChatProvider deepseek = provider("deepseek");
+        ChatProvider bailian = provider("bailian");
+        OpenAiChatClient client = mock(OpenAiChatClient.class);
+
+        /* 401 一并终止：即便两个 provider 用不同 key，也不做降级尝试 */
+        when(client.chat(eq(deepseek), eq(SYSTEM), eq(USER)))
+                .thenThrow(new LlmCallException("invalid api key", false, 401));
+
+        ChatFailoverOrchestrator orchestrator =
+                orchestrator(client, List.of(deepseek, bailian), 2);
+
+        assertThrows(LlmExhaustedException.class, () -> orchestrator.chat(SYSTEM, USER));
+        verify(client, times(1)).chat(eq(deepseek), eq(SYSTEM), eq(USER));
+        verify(client, never()).chat(eq(bailian), eq(SYSTEM), eq(USER));
     }
 
     @Test

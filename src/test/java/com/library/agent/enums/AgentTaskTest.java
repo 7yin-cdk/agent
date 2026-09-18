@@ -67,6 +67,28 @@ class AgentTaskTest {
     }
 
     @Test
+    void routePromptDocumentsNoMatchSentinel() throws Exception {
+        /* 哨兵值定义在枚举、使用在路由服务、声明在路由模板，三者漂移即红 */
+        String routePrompt = new String(new ClassPathResource("Prompt/RoutePrompt.md")
+                .getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        assertTrue(routePrompt.contains(AgentTask.NO_MATCH),
+                "RoutePrompt.md 缺少无匹配哨兵值: " + AgentTask.NO_MATCH);
+    }
+
+    @Test
+    void noMatchSentinelIsNotATaskName() {
+        assertTrue(AgentTask.fromRouteName(AgentTask.NO_MATCH).isEmpty(),
+                "哨兵值不是任务能力，不应被解析成任务");
+        assertTrue(AgentTask.isNoMatch("  no_match  "), "应容忍大小写与首尾空格");
+        assertTrue(AgentTask.isNoMatch(AgentTask.NO_MATCH));
+        assertFalse(AgentTask.isNoMatch("slow_query"));
+        assertFalse(AgentTask.isNoMatch(null));
+        assertFalse(AgentTask.isNoMatch("   "));
+        assertFalse(AgentTask.availableTasksText().contains(AgentTask.NO_MATCH),
+                "哨兵值不应出现在面向用户的可用能力清单中");
+    }
+
+    @Test
     void availableTasksTextListsAllTasks() {
         String text = AgentTask.availableTasksText();
         for (AgentTask task : AgentTask.values()) {

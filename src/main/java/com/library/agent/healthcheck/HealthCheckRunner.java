@@ -116,6 +116,26 @@ public class HealthCheckRunner {
                 .append("   参数: instanceName(实例业务名)、runId(必须原样透传本任务给定的值)、")
                 .append("subject(邮件主题)、content(邮件正文)\n")
                 .append("   说明: 向该实例预配置的告警联系人发送告警邮件。\n\n");
+        sb.append("以下为异常下钻工具（只读），用于指标越界后定位根因。它们的 instance 参数既接受 host:port，")
+                .append("也接受巡检配置中的业务名；使用业务名时可省略 database。\n")
+                .append("3. getWaitEventDistribution / listActiveSessions\n")
+                .append("   参数: instance、database(可选)\n")
+                .append("   说明: 等待事件大类分布、活跃会话明细；用于判断整体卡在锁/IO/客户端等哪一类资源上。\n")
+                .append("4. getBlockingChains\n")
+                .append("   参数: instance、database(可选)\n")
+                .append("   说明: 锁阻塞边列表，含阻塞方 pid/用户/事务已开启时长/持锁对象、被挡住的会话数与是否链源头。\n")
+                .append("5. getVacuumAndBloatStatus\n")
+                .append("   参数: instance、database(可选)\n")
+                .append("   说明: 死元组最多的表，以及持最旧 backend_xmin 的会话与最长事务，用于判别表膨胀根因。\n")
+                .append("6. getReplicationStatus\n")
+                .append("   参数: instance、database(可选)\n")
+                .append("   说明: 主备角色、从库复制延迟分段与 LSN 差值、复制槽保留字节数与非活跃槽位数。\n")
+                .append("7. getTableAccessStats\n")
+                .append("   参数: instance、database(可选)\n")
+                .append("   说明: 顺序扫描最多的表及其索引使用率、热表上未使用的索引。\n")
+                .append("8. getTopSlowQueries\n")
+                .append("   参数: instance、database(可选)\n")
+                .append("   说明: 基于 pg_stat_statements 的 Top 10 慢查询。\n\n");
 
         sb.append("### 异常判定阈值\n")
                 .append("- 缓冲池命中率 bufferHitRate < ").append(t.getBufferHitRateMin()).append("% 异常\n")
@@ -131,10 +151,14 @@ public class HealthCheckRunner {
         sb.append("对每个实例依次执行：\n")
                 .append("1. 调用 checkDatabaseHealth，参数 instanceName=实例业务名，获取实时指标。\n")
                 .append("2. 依据上述阈值判断各项指标是否异常。\n")
-                .append("3. 若存在异常指标，调用 sendAlertEmail 发送告警邮件：instanceName=实例业务名，")
+                .append("3. 若存在异常指标，先调用对应的下钻工具（工具 3-8）定位根因：")
+                .append("instance 直接复用该实例的业务名，database 复用上一步工具返回结果中的值，")
+                .append("两者的 argument_sources 标为 TOOL_OUTPUT，不需要也不应该向用户索要。\n")
+                .append("4. 根因明确后调用 sendAlertEmail 发送告警邮件：instanceName=实例业务名，")
                 .append("runId=").append(runId).append("，subject=\"[DB告警] {实例名} {N}项指标异常\"，")
-                .append("content=列出异常指标名称、当前值、阈值与优化建议。\n")
-                .append("4. 记录该实例结论后继续下一个实例。\n\n");
+                .append("content=列出异常指标名称、当前值、阈值，并附上下钻得到的根因证据（如阻塞方 pid/持锁时长、")
+                .append("死元组最多的表、非活跃槽位名等）与优化建议。\n")
+                .append("5. 记录该实例结论后继续下一个实例。\n\n");
 
         sb.append("### 历史步骤\n");
         sb.append("{{react_history}}\n");
@@ -148,7 +172,8 @@ public class HealthCheckRunner {
         sb.append("最终回答: {\"type\":\"finish\",\"thought\":\"理由\",\"tool\":null,")
                 .append("\"finish\":{\"answer\":\"最终巡检总结\"}}\n");
         sb.append("要求: tool.name 必须是可用工具之一；arguments 中每个参数都必须有同名的 argument_sources，")
-                .append("取值只能为 EXPLICIT_CURRENT；禁止编造指标数据，只能使用工具返回的结果；")
+                .append("取值只能为 EXPLICIT_CURRENT 或 TOOL_OUTPUT（后者表示该值复用此前工具返回结果中的值，")
+                .append("用于链式下钻，不需要用户再次提供）；禁止编造指标数据，只能使用工具返回的结果；")
                 .append("不要输出 JSON 以外的任何内容。\n");
         return sb.toString();
     }
