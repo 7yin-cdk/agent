@@ -133,6 +133,15 @@ public class LongTermMemoryProperties {
          * 每日清扫 cron（六段），默认每天 03:17:00。
          */
         private String cron = "0 17 3 * * *";
+
+        /**
+         * 使用行为权重 α，默认 0.8。
+         * <p>
+         * 淘汰类（ENTITY/EXPERIENCE）的淘汰分 = α × 使用行为项 + (1-α) × 入库距今天数，
+         * 分高者先淘汰。α 越大越看重"最近使用/召回频率"，越小越看重"入库先后"。
+         * α = 1 退化为纯使用行为排序，α = 0 退化为纯 FIFO。
+         */
+        private double usageWeight = 0.8;
     }
 
     /**

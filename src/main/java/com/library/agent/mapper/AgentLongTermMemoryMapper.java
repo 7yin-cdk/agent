@@ -107,12 +107,20 @@ public interface AgentLongTermMemoryMapper {
     long countByCategory(@Param("userId") String userId, @Param("category") String category);
 
     /**
-     * 选取淘汰候选：低重要度 + 久未访问 + 低频优先。
+     * 选取淘汰候选，排序规则按分类分化：
+     * <p>
+     * 永久类（USER_PROFILE/PREFERENCE/CONSTRAINT）低重要度优先；
+     * 实体知识（ENTITY）按"久未召回 + 召回次数少 + 入库久"的加权淘汰分优先；
+     * 历史经验（EXPERIENCE）按"久未召回 + 入库久"的加权淘汰分优先。
+     * 淘汰分相同时统一由入库时间较早者优先淘汰。
+     *
+     * @param usageWeight 淘汰分中"使用行为"的权重 α，见 LongTermMemoryProperties.Eviction
      */
     List<AgentLongTermMemory> selectEvictCandidates(
             @Param("userId") String userId,
             @Param("category") String category,
-            @Param("limit") int limit
+            @Param("limit") int limit,
+            @Param("usageWeight") double usageWeight
     );
 
     /**

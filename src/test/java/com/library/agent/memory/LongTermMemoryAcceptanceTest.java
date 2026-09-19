@@ -324,9 +324,11 @@ class LongTermMemoryAcceptanceTest {
 
             long kept = countByCategory(uid, "EXPERIENCE");
             assertTrue(kept <= 3, "超容量应被淘汰到容量内，当前=" + kept);
+            /* 经验类已改为按"淘汰分"淘汰（重要度不再参与）：四条均刚入库、淘汰分相同，
+               由入库时间兜底 → 最先入库的那条（low）被淘汰 */
             assertNull(service.getById(U_EVICT, low.getId()),
-                    "最不重要（importance=2）的经验应最先被淘汰");
-            System.out.println("  [PASS] 淘汰后 EXPERIENCE 剩 " + kept + " 条，低重要度条目已物理删除");
+                    "容量超限时应淘汰入库最早的经验（重要度不再参与经验类淘汰）");
+            System.out.println("  [PASS] 淘汰后 EXPERIENCE 剩 " + kept + " 条，最早入库的条目已物理删除");
         } finally {
             props.getCapacity().setExperience(savedCap);
         }

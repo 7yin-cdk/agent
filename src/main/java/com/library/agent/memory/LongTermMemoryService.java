@@ -92,7 +92,8 @@ public interface LongTermMemoryService {
     void deleteByUser(Long userId);
 
     /**
-     * 写入后容量淘汰：超过该分类上限时按重要度×最近访问淘汰。
+     * 写入后容量淘汰：超过该分类上限时按分类自己的规则淘汰
+     * （永久类按重要度，实体按召回频率，经验按最近使用时间，均以入库时间并列兜底）。
      */
     void evictIfNeeded(Long userId, String category);
 

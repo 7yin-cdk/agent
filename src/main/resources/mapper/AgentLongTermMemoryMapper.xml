@@ -292,7 +292,32 @@
         WHERE user_id = #{userId}
           AND category = #{category}
           AND is_deleted = FALSE
-        ORDER BY importance ASC, last_accessed_at ASC NULLS FIRST, access_count ASC, id ASC
+        <choose>
+            <!--
+              实体知识：召回越少、越久没被召回、入库越久 → 淘汰分越高，越先被 LIMIT 选中淘汰。
+              淘汰分 = α × (最后使用距今天数 ÷ (召回次数+1)) + (1-α) × 入库距今天数。
+              从未召回过的记忆按入库时间算最后使用，所以刚入库的记忆淘汰分接近 0，不会被立即淘汰。
+            -->
+            <when test="category == 'ENTITY'">
+                ORDER BY
+                    (#{usageWeight} * ((EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - COALESCE(last_accessed_at, created_at))))::double precision / (access_count + 1))
+                     + (1 - #{usageWeight}) * (EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - created_at)))::double precision) DESC,
+                    created_at ASC,
+                    id ASC
+            </when>
+            <!-- 历史经验：越久没被召回、入库越久 → 淘汰分越高，越先被淘汰 -->
+            <when test="category == 'EXPERIENCE'">
+                ORDER BY
+                    (#{usageWeight} * (EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - COALESCE(last_accessed_at, created_at))))::double precision
+                     + (1 - #{usageWeight}) * (EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - created_at)))::double precision) DESC,
+                    created_at ASC,
+                    id ASC
+            </when>
+            <!-- 永久类（画像/偏好/约束）：低重要度先淘汰；并列时先入库的先淘汰 -->
+            <otherwise>
+                ORDER BY importance ASC, created_at ASC, id ASC
+            </otherwise>
+        </choose>
         LIMIT #{limit}
     </select>
 

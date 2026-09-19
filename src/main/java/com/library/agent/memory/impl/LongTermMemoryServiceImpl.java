@@ -669,7 +669,9 @@ public class LongTermMemoryServiceImpl implements LongTermMemoryService {
         if (excess <= 0) {
             return;
         }
-        List<AgentLongTermMemory> victims = longTermMemoryMapper.selectEvictCandidates(uid, category, excess);
+        /* 取该分类下最该淘汰的 excess 条：排序规则由 mapper 按分类分化，实体/经验按加权淘汰分 */
+        List<AgentLongTermMemory> victims = longTermMemoryMapper.selectEvictCandidates(
+                uid, category, excess, properties.getEviction().getUsageWeight());
         if (victims == null || victims.isEmpty()) {
             return;
         }
