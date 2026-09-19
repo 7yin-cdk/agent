@@ -16,8 +16,8 @@ import java.util.List;
  * <p>
  * 供大模型在 ReAct 循环中调用：按业务名解析目标实例的预配置联系人邮箱，
  * 发送告警邮件。收件人只能来自巡检配置，大模型无法自行指定邮箱地址，
- * 防止误发或乱发。发送成功后登记到 {@link EmailSendRegistry}，
- * 供规则兜底判断是否已发送。
+ * 防止误发或乱发。发送成功后把本封邮件覆盖的指标登记到 {@link EmailSendRegistry}，
+ * 供规则兜底判断还有哪些异常项需要补发。
  */
 @Component
 @RequiredArgsConstructor
@@ -34,6 +34,7 @@ public class EmailAlertTool {
      * @param runId        本轮巡检的 runId，任务给定，必须原样透传
      * @param subject      邮件主题
      * @param content      邮件正文，需包含异常指标、当前值、阈值与优化建议
+     * @param metrics      本封邮件实际告警的指标英文名列表，可为空
      * @return 发送结果 JSON
      */
     @Tool("向指定数据库实例的预配置告警联系人发送告警邮件，收件人由配置决定。邮件正文需包含异常指标、当前值、阈值与优化建议")
@@ -42,7 +43,9 @@ public class EmailAlertTool {
             @P("数据库实例业务名，在巡检配置中定义，例如：rag库") String instanceName,
             @P("本轮巡检的 runId，必须使用任务给定的值") String runId,
             @P("邮件主题") String subject,
-            @P("邮件正文，需包含异常指标、当前值、阈值与优化建议") String content) {
+            @P("邮件正文，需包含异常指标、当前值、阈值与优化建议") String content,
+            @P(required = false, value = "本封邮件实际告警的指标英文名列表，取值必须是系统注入的指标 JSON "
+                    + "里的字段名，例如 [\"lockWaitingSessions\",\"idleInTransaction\"]") List<String> metrics) {
 
         Target target = findTarget(instanceName);
         if (target == null) {
@@ -56,7 +59,8 @@ public class EmailAlertTool {
 
         boolean sent = mailService.sendHtml(emails, subject, buildHtml(instanceName, content));
         if (sent) {
-            sendRegistry.markSent(runId, instanceName);
+            /* 登记本封邮件覆盖的指标明细，供规则兜底只补发模型漏报的那些项 */
+            sendRegistry.markSent(runId, instanceName, metrics);
             return "{\"success\":true,\"instance\":\"" + instanceName
                     + "\",\"recipients\":" + emails.size() + ",\"message\":\"告警邮件已发送\"}";
         }
