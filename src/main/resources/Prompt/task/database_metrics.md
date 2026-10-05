@@ -32,15 +32,12 @@ Database Metrics Collection
 
 ### 数据库实例识别
 
-用户可能采用以下方式描述数据库实例：
+本任务只接受一种实例写法：`host:port` 字面地址（例如 `localhost:5432`），并且必须同时给出数据库名称。
 
-- 帮我采集 localhost:5432 上 mydb 库的性能指标
-- 看看 192.168.1.100:5432/test_db 的数据库健康状况
-- 巡检一下生产库 10.0.0.50:5432/order_db
+- 用户给了 `host:port` 字面地址：帮我采集 localhost:5432 上 mydb 库的性能指标
+- 用户给的地址没带端口、或只给了库名：属于缺少必要参数，向用户询问补齐
 
-如果用户未明确提供数据库实例地址或数据库名，应向用户询问。
-
-不得自行猜测数据库连接信息。
+不得自行猜测数据库连接信息，也不要用默认端口替用户补全。
 
 ---
 
@@ -131,8 +128,8 @@ Database Metrics Collection
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| instance | string | 是 | 数据库实例地址 `host:port`，**或**巡检配置中的业务名（如 `rag库`） |
-| database | string | 否 | 数据库名称；用业务名时可省略（自动回填该实例配置的库名），用 `host:port` 时必填 |
+| instance | string | 是 | 数据库实例地址，格式为 `host:port`，例如 `localhost:5432` |
+| database | string | 是 | 数据库名称 |
 
 多步下钻时，后续步骤的 `instance`/`database` 直接复用上一步工具返回结果中的值，不需要让用户重新提供；
 `argument_sources` 按值的实际来处标注：值逐字在用户本轮原话里 → `EXPLICIT_CURRENT`，
@@ -148,22 +145,22 @@ Database Metrics Collection
 
 分析用户请求。
 
-判断是否明确包含以下信息：
+判断是否**同时**明确包含：
 
-- 数据库实例地址（host:port）
+- 数据库实例地址，且为 `host:port` 形式（如 `localhost:5432`）
 - 数据库名称
 
 ---
 
 ### Step 2
 
-如果缺少数据库实例地址或数据库名：
+如果以上信息缺少任意一项（含地址没带端口的情况）：
 
 结束当前执行，
 
 询问用户提供缺失的连接信息。
 
-不得调用工具。
+不得调用工具，不得用默认端口补全。
 
 ---
 
@@ -171,7 +168,7 @@ Database Metrics Collection
 
 确认以上信息均已获取：
 
-调用数据库指标采集工具。
+调用 `collectDatabaseMetrics`，传 `instance`（`host:port`）与 `database`。
 
 ---
 

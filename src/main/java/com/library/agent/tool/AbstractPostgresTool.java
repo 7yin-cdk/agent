@@ -177,6 +177,30 @@ public abstract class AbstractPostgresTool {
     }
 
     /**
+     * 校验工具入参：实例必须是 host:port 形式，且数据库名不能为空。
+     * <p>
+     * 各工具统一走这里，保证"必须显式提供实例与数据库"的口径一致。不再支持业务名，
+     * 也不再自动补默认端口：连接目标必须由调用方写全，避免被隐式改写成别的实例。
+     *
+     * @param instance 数据库实例地址，须形如 host:port
+     * @param database 数据库名称
+     * @return 校验通过返回 null；否则返回可直接返回给大模型的错误 JSON
+     */
+    protected String validateTarget(String instance, String database) {
+        if (instance == null || instance.isBlank()) {
+            return errorJson("数据库实例地址不能为空");
+        }
+        if (!instance.contains(":")) {
+            return errorJson("数据库实例地址必须带端口，请提供 host:port 形式（如 localhost:5432），"
+                    + "当前值: " + instance);
+        }
+        if (database == null || database.isBlank()) {
+            return errorJson("数据库名称不能为空");
+        }
+        return null;
+    }
+
+    /**
      * 连接异常时清理已失效的连接池，避免后续调用持续复用坏连接。
      * <p>
      * 缓存的池可能早于本次调用被换掉（并发下另一个调用已重建），因此按池键取出实际

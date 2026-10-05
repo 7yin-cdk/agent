@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 响应式流式输出服务。
@@ -74,26 +75,33 @@ public class ReactiveStreamingService {
         Map<String, String> mdcContext = MDC.getCopyOfContextMap();
         UserContext userContext = UserContextHolder.get();
 
+        /* 采集器提到异步任务外层：失败路径必须落同一份采集器，
+           否则 ERROR 的 trace 会丢掉已识别到的意图、Token、耗时与工具调用记录 */
+        ConversationTraceCollector collector = new ConversationTraceCollector(userId, conversationId, query);
+        /* 成功路径已落库后不再由失败路径重复写入（例如异常发生在 done 事件收尾阶段） */
+        AtomicBoolean traceSaved = new AtomicBoolean(false);
+
         CompletableFuture.runAsync(() -> {
             UserContextHolder.set(userContext);
             try {
                 if (currentSpan != null) {
                     try (Tracer.SpanInScope ignored = tracer.withSpan(currentSpan)) {
                         if (mdcContext != null) MDC.setContextMap(mdcContext);
-                        doChatAndStream(userId, conversationId, query, emitter);
+                        doChatAndStream(userId, conversationId, query, emitter, collector, traceSaved);
                         emitter.complete();
                     }
                 } else {
-                    doChatAndStream(userId, conversationId, query, emitter);
+                    doChatAndStream(userId, conversationId, query, emitter, collector, traceSaved);
                     emitter.complete();
                 }
             } catch (Exception e) {
                 log.error("Reactive chat failed, userId={}, convId={}", userId, conversationId, e);
                 sendEvent(emitter, "error", Map.of("message", userFacingMessage(e)));
-                try {
-                    ConversationTraceCollector errCollector = new ConversationTraceCollector(userId, conversationId, query);
-                    traceService.save(errCollector, "ERROR", e.getMessage());
-                } catch (Exception ignored) { }
+                if (traceSaved.compareAndSet(false, true)) {
+                    try {
+                        traceService.save(collector, "ERROR", e.getMessage());
+                    } catch (Exception ignored) { }
+                }
                 emitter.complete();
             } finally {
                 UserContextHolder.clear();
@@ -111,10 +119,8 @@ public class ReactiveStreamingService {
      * @param query 用户输入的query
      * @param emitter
      */
-    private void doChatAndStream(Long userId, String conversationId, String query, SseEmitter emitter) {
-        /* 0. 创建可观测采集器 */
-        ConversationTraceCollector collector = new ConversationTraceCollector(userId, conversationId, query);
-
+    private void doChatAndStream(Long userId, String conversationId, String query, SseEmitter emitter,
+                                 ConversationTraceCollector collector, AtomicBoolean traceSaved) {
         /* 1. 加载历史 + 摘要 */
         List<AgentShortTermMemory> historyMessages =
                 shortTermMemoryService.listRecentMessages(userId, conversationId, ANSWER_HISTORY_LIMIT);
@@ -162,7 +168,8 @@ public class ReactiveStreamingService {
         longTermMemoryService.postTurn(userId, conversationId, query, fullAnswer.toString(), historyMessages, null);
         conversationSummaryService.triggerSummaryIfNeeded(userId, conversationId);
 
-        /* 8. 保存可观测数据 */
+        /* 8. 保存可观测数据：先置位再落库，避免后续异常被失败路径当成「未落库」再写一次 */
+        traceSaved.set(true);
         traceService.save(collector, "SUCCESS", null);
 
         /* 9. done 事件 */

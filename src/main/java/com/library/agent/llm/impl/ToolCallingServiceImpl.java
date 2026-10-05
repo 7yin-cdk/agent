@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.library.agent.context.AgentChatContext;
 import com.library.agent.llm.LlmExhaustedException;
 import com.library.agent.llm.ToolCallingService;
+import com.library.agent.llm.ToolSchemaView;
 import com.library.agent.llm.resilience.ChatModelFailoverOrchestrator;
 import com.library.agent.observability.ConversationTraceCollector;
 import com.library.agent.tool.ToolAccess;
@@ -16,6 +17,14 @@ import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.request.ChatRequest;
+import dev.langchain4j.model.chat.request.json.JsonArraySchema;
+import dev.langchain4j.model.chat.request.json.JsonBooleanSchema;
+import dev.langchain4j.model.chat.request.json.JsonEnumSchema;
+import dev.langchain4j.model.chat.request.json.JsonIntegerSchema;
+import dev.langchain4j.model.chat.request.json.JsonNumberSchema;
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+import dev.langchain4j.model.chat.request.json.JsonSchemaElement;
+import dev.langchain4j.model.chat.request.json.JsonStringSchema;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.service.tool.DefaultToolExecutor;
 import dev.langchain4j.service.tool.ToolExecutor;
@@ -147,6 +156,63 @@ public class ToolCallingServiceImpl implements ToolCallingService {
             toolExecutor.shutdownNow();
             Thread.currentThread().interrupt();
         }
+    }
+
+    @Override
+    public List<ToolSchemaView> describeRegisteredTools() {
+        List<ToolSchemaView> views = new ArrayList<>();
+        for (Map.Entry<String, RegisteredTool> entry : registeredTools.entrySet()) {
+            RegisteredTool registered = entry.getValue();
+            ToolSpecification specification = registered.specification();
+
+            ToolSchemaView view = new ToolSchemaView();
+            view.setName(entry.getKey());
+            view.setAccess(registered.accessType().name());
+
+            JsonObjectSchema parameters = specification.parameters();
+            List<String> requiredNames = parameters == null || parameters.required() == null
+                    ? List.of() : parameters.required();
+
+            List<ToolSchemaView.Param> params = new ArrayList<>();
+            if (parameters != null && parameters.properties() != null) {
+                for (Map.Entry<String, JsonSchemaElement> property : parameters.properties().entrySet()) {
+                    ToolSchemaView.Param param = new ToolSchemaView.Param();
+                    param.setName(property.getKey());
+                    param.setType(jsonTypeName(property.getValue()));
+                    param.setRequired(requiredNames.contains(property.getKey()));
+                    params.add(param);
+                }
+            }
+            view.setParams(params);
+            views.add(view);
+        }
+        return views;
+    }
+
+    /**
+     * 把 langchain4j 的 JSON schema 元素映射成测评侧可读的类型名。
+     * 未识别的元素返回 unknown，让参数类型校验按「无法判定」处理，而不是误判为通过。
+     */
+    private String jsonTypeName(JsonSchemaElement element) {
+        if (element instanceof JsonStringSchema || element instanceof JsonEnumSchema) {
+            return "string";
+        }
+        if (element instanceof JsonIntegerSchema) {
+            return "integer";
+        }
+        if (element instanceof JsonNumberSchema) {
+            return "number";
+        }
+        if (element instanceof JsonBooleanSchema) {
+            return "boolean";
+        }
+        if (element instanceof JsonArraySchema) {
+            return "array";
+        }
+        if (element instanceof JsonObjectSchema) {
+            return "object";
+        }
+        return "unknown";
     }
 
     @Override

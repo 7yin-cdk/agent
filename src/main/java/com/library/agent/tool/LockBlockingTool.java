@@ -26,8 +26,6 @@ import java.sql.ResultSet;
 @RequiredArgsConstructor
 public class LockBlockingTool extends AbstractPostgresTool {
 
-    private final InstanceResolver instanceResolver;
-
     /**
      * 获取当前数据库的锁阻塞边列表。
      * <p>
@@ -36,26 +34,23 @@ public class LockBlockingTool extends AbstractPostgresTool {
      * 避免把索引锁当成被争用的对象；{@code rootBlocker} 表示该阻塞者自身未在等锁，
      * 是整条链的源头。
      *
-     * @param instance 数据库实例地址 host:port，或巡检配置中的业务名
-     * @param database 数据库名称；使用业务名时可省略
+     * @param instance 数据库实例地址，须形如 host:port
+     * @param database 数据库名称
      * @return 阻塞边列表 JSON；无阻塞时返回空数组
      */
     @Tool("获取指定数据库当前的锁阻塞关系（阻塞方 pid/用户/应用/状态/事务已开启时长/backend_xmin/正在执行的 SQL、持有锁的模式与对象、是否链源头，以及等待方 pid/用户/状态/已等待时长/正在执行的 SQL、被该阻塞方挡住的会话数），用于定位锁等待的根因会话与长事务")
     public String getBlockingChains(
-            @P("数据库实例地址 host:port，或巡检配置中的业务名（如 rag库）") String instance,
-            @P(required = false, value = "数据库名称；使用业务名时可省略，默认取该实例配置的库名") String database) {
+            @P("数据库实例地址，格式为 host:port，例如 localhost:5432") String instance,
+            @P("数据库名称") String database) {
 
-        InstanceResolver.ResolvedTarget target = instanceResolver.resolve(instance, database);
-        if (target == null) {
-            return errorJson("无法解析数据库实例: " + instance
-                    + "。请提供 host:port 形式的地址（如 localhost:5432），或 agent.healthcheck.targets "
-                    + "中已定义的业务名（如 rag库）；仅当使用业务名时可省略 database 参数");
+        String paramError = validateTarget(instance, database);
+        if (paramError != null) {
+            return paramError;
         }
 
-        return executeWithRetry(target.hostPort(), target.database(), "锁阻塞链采集失败", conn -> {
+        return executeWithRetry(instance, database, "锁阻塞链采集失败", conn -> {
 
-            ObjectNode result = baseResult(instance, target.database());
-            result.put("resolvedInstance", target.hostPort());
+            ObjectNode result = baseResult(instance, database);
 
             String sql =
                     "WITH blocking AS ( "
@@ -94,7 +89,7 @@ public class LockBlockingTool extends AbstractPostgresTool {
             ArrayNode edges = OBJECT_MAPPER.createArrayNode();
 
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
-                ps.setString(1, target.database());
+                ps.setString(1, database);
                 try (ResultSet rs = ps.executeQuery()) {
                     while (rs.next()) {
                         ObjectNode edge = OBJECT_MAPPER.createObjectNode();

@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS agent_eval_case_result (
     case_id            VARCHAR(64)  NOT NULL,                  -- 用例编号，如 chat_001 / tool_042 / rag_zh_003
     category           VARCHAR(32),                            -- 用例分类：知识问答/诊断/告警/越界、single_tool/multi_tool/hard_negative 等
     difficulty         VARCHAR(16),                            -- 难度：EASY / MEDIUM / HARD
+    intent_type        VARCHAR(32),                            -- 意图识别观测值：KNOWLEDGE_BASE / COMPLEX_TASK（取自 trace，用于校验期望意图）
     query              TEXT,                                   -- 用户输入原文（便于失败回溯）
     trace_id           VARCHAR(64),                            -- 关联可观测三表 agent_conversation_trace / _llm_call_record / _tool_call_record
     task_success       BOOLEAN,                                -- 任务是否成功（整体测评 TSR 分子）
@@ -80,8 +81,13 @@ CREATE INDEX IF NOT EXISTS idx_eval_case_case_id
 CREATE INDEX IF NOT EXISTS idx_eval_case_trace
     ON agent_eval_case_result (trace_id);
 
+/* 存量表补列：上面的 CREATE TABLE 用了 IF NOT EXISTS，表已存在时不会生效，
+   因此这里单独用幂等 ALTER 补 intent_type，保证老库也能加上。 */
+ALTER TABLE agent_eval_case_result ADD COLUMN IF NOT EXISTS intent_type VARCHAR(32);
+
 COMMENT ON COLUMN agent_eval_run.suite_name IS '测评套件：CHAT 整体测评 / TOOL 工具调用测评 / RAG 检索测评';
 COMMENT ON COLUMN agent_eval_run.status IS '批次状态：RUNNING 执行中 / FINISHED 已完成 / FAILED 异常中断';
 COMMENT ON COLUMN agent_eval_case_result.difficulty IS '用例难度：EASY / MEDIUM / HARD';
+COMMENT ON COLUMN agent_eval_case_result.intent_type IS '意图识别观测值：KNOWLEDGE_BASE / COMPLEX_TASK；期望意图留在数据集里，此列只存观测值';
 COMMENT ON COLUMN agent_eval_case_result.task_success IS '任务是否成功，整体测评任务成功率(Task Success Rate)的分子';
 COMMENT ON COLUMN agent_eval_case_result.quality_total IS '回答质量六维加权总分，权重：正确性30%/完整性20%/可操作性20%/相关性15%/安全10%/格式5%';

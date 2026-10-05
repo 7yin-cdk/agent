@@ -175,3 +175,64 @@ class AgentClient:
         )
         response.raise_for_status()
         return response.json()
+
+    def list_documents(self, status=None, page=1, size=100):
+        params = {"page": page, "size": size}
+        if status:
+            params["status"] = status
+        response = self.session.get(
+            f"{self.base_url}/agent/kb/documents",
+            headers=self._auth_headers(),
+            params=params,
+            timeout=60,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def list_chunks(self, file_id, page=1, size=200):
+        response = self.session.get(
+            f"{self.base_url}/agent/kb/documents/{file_id}/chunks",
+            headers=self._auth_headers(),
+            params={"page": page, "size": size},
+            timeout=60,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def rag_retrieve_batch(self, requests):
+        response = self.session.post(
+            f"{self.base_url}/eval/rag/retrieve-batch",
+            headers=self._auth_headers(),
+            json=requests,
+            timeout=config.TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def gen_queries(self, file_name, section_path, chunk_text):
+        response = self.session.post(
+            f"{self.base_url}/eval/rag/gen-query",
+            headers=self._auth_headers(),
+            json={"fileName": file_name, "sectionPath": section_path, "chunkText": chunk_text},
+            timeout=config.TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def gen_query_version(self):
+        response = self.session.get(
+            f"{self.base_url}/eval/rag/gen-query/version",
+            headers=self._auth_headers(),
+            timeout=30,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def tool_schema(self):
+        response = self.session.get(
+            f"{self.base_url}/eval/tools/schema",
+            headers=self._auth_headers(),
+            timeout=30,
+        )
+        response.raise_for_status()
+        return response.json()

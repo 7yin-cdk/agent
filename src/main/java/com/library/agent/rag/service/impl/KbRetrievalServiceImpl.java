@@ -7,6 +7,7 @@ import com.library.agent.mapper.TextChunkVectorMapper;
 import com.library.agent.rag.dto.ChunkSimilarity;
 import com.library.agent.rag.dto.ChunkView;
 import com.library.agent.rag.dto.RetrievedChunk;
+import com.library.agent.rag.dto.RetrievalStageTrace;
 import com.library.agent.rag.service.KbRetrievalService;
 import com.library.agent.rag.service.RrfMerger;
 import lombok.RequiredArgsConstructor;
@@ -36,14 +37,31 @@ public class KbRetrievalServiceImpl implements KbRetrievalService {
 
     @Override
     public List<RetrievedChunk> retrieve(String query, Integer topK, Boolean rerank, Long fileId) {
+        return retrieve(query, topK, rerank, fileId, null);
+    }
+
+    @Override
+    public List<RetrievedChunk> retrieve(String query, Integer topK, Boolean rerank, Long fileId,
+                                         RetrievalStageTrace stageTrace) {
         int limit = topK == null ? 10 : Math.min(Math.max(topK, 1), 50);
         boolean doRerank = rerank == null || rerank;
+
+        /* 测评收集器可能为 null（生产链路一律传 null），此处只记录本次生效的截断长度 */
+        if (stageTrace != null) {
+            stageTrace.setLimit(limit);
+        }
 
         /* 1. 向量检索（带距离） + 关键词检索 */
         float[] vector = toVector(llmService.embed(query.trim()));
         List<ChunkSimilarity> similarities = textChunkVectorMapper.selectTopKWithDistance(vector, VECTOR_TOP_K);
         List<Long> keywordIds = keywordSearchService.searchChunkIds(query.trim(), KEYWORD_TOP_K);
         List<Long> vectorIds = similarities.stream().map(ChunkSimilarity::getChunkId).toList();
+
+        /* 两路原始结果先落收集器，再判空返回；否则报告分不清「两路皆空」与「没跑到这一步」 */
+        if (stageTrace != null) {
+            stageTrace.setVectorIds(vectorIds);
+            stageTrace.setKeywordIds(keywordIds);
+        }
 
         if (vectorIds.isEmpty() && keywordIds.isEmpty()) {
             return List.of();
@@ -55,6 +73,13 @@ public class KbRetrievalServiceImpl implements KbRetrievalService {
         if (fileId != null) {
             rows = rows.stream().filter(r -> Objects.equals(r.getFileId(), fileId)).toList();
         }
+
+        /* 融合结果与 fileId 过滤后的候选一并落收集器，用于算 RRF 融合损失 */
+        if (stageTrace != null) {
+            stageTrace.setMergedIds(merged);
+            stageTrace.setCandidateIds(rows.stream().map(ChunkView::getChunkId).toList());
+        }
+
         if (rows.isEmpty()) {
             return List.of();
         }
@@ -68,6 +93,14 @@ public class KbRetrievalServiceImpl implements KbRetrievalService {
                 reordered.add(rows.get(idx));
             }
             rows = reordered;
+
+            /* 重排确实执行过才记 true，与「rerank 被关闭」区分开 */
+            if (stageTrace != null) {
+                stageTrace.setRerankedIds(rows.stream().map(ChunkView::getChunkId).toList());
+                stageTrace.setRerankApplied(true);
+            }
+        } else if (stageTrace != null) {
+            stageTrace.setRerankApplied(false);
         }
 
         /* 4. 组装结果：score 取向量余弦相似度 1-distance */
@@ -77,8 +110,15 @@ public class KbRetrievalServiceImpl implements KbRetrievalService {
                 scoreByChunk.put(s.getChunkId(), 1.0 - s.getDistance());
             }
         }
+
+        /* 最终输出被 limit 截断，收集器记录的必须是截断后的顺序 */
+        int emitCount = Math.min(rows.size(), limit);
+        if (stageTrace != null) {
+            stageTrace.setFinalIds(rows.subList(0, emitCount).stream().map(ChunkView::getChunkId).toList());
+        }
+
         List<RetrievedChunk> result = new ArrayList<>();
-        for (int i = 0; i < rows.size() && i < limit; i++) {
+        for (int i = 0; i < emitCount; i++) {
             ChunkView r = rows.get(i);
             RetrievedChunk hit = new RetrievedChunk();
             hit.setFileId(r.getFileId());

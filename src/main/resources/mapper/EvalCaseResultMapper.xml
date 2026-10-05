@@ -11,6 +11,7 @@
         <result property="caseId" column="case_id"/>
         <result property="category" column="category"/>
         <result property="difficulty" column="difficulty"/>
+        <result property="intentType" column="intent_type"/>
         <result property="query" column="query"/>
         <result property="traceId" column="trace_id"/>
         <result property="taskSuccess" column="task_success"/>
@@ -45,6 +46,7 @@
         case_id,
         category,
         difficulty,
+        intent_type,
         query,
         trace_id,
         task_success,
@@ -80,6 +82,7 @@
             #{caseId},
             #{category},
             #{difficulty},
+            #{intentType},
             #{query},
             #{traceId},
             #{taskSuccess},
@@ -114,6 +117,7 @@
                 #{item.caseId},
                 #{item.category},
                 #{item.difficulty},
+                #{item.intentType},
                 #{item.query},
                 #{item.traceId},
                 #{item.taskSuccess},

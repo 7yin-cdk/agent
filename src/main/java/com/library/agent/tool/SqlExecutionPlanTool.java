@@ -31,6 +31,11 @@ public class SqlExecutionPlanTool extends AbstractPostgresTool {
             @P("需要获取执行计划的SQL语句，仅支持单条SELECT/INSERT/UPDATE/DELETE语句") String sql,
             @P("执行计划模式：estimated（估算计划，不实际执行SQL）或 actual（实际执行SQL并收集真实统计信息），默认为estimated") String mode) {
 
+        String paramError = validateTarget(instance, database);
+        if (paramError != null) {
+            return paramError;
+        }
+
         /* 入参 mode 会被重新赋值、无法被 lambda 捕获，故先归一为不可变局部变量 */
         String planMode = (mode == null || mode.isBlank()) ? "estimated" : mode;
 

@@ -27,7 +27,7 @@ class ToolCallGuardTest {
 
     /* 模拟上一轮工具返回的 JSON（值落在其中即为“来自工具输出”） */
     private static final String PRIOR_OUTPUT =
-            "{\"success\":true,\"instance\":\"rag库\",\"database\":\"rag_db\",\"resolvedInstance\":\"localhost:5432\"}";
+            "{\"success\":true,\"instance\":\"localhost:5432\",\"database\":\"rag_db\"}";
 
     /* ======================= normalize ======================= */
 

@@ -281,14 +281,14 @@ function architecture() {
   b += box(1016, l4.y + 146, 264, 58, 'VectorStoreService', ['pgvector 向量读写'], P.domain, 14, 11.5);
   b += groupLabel(50, l4.y + 228, '可调用工具集（LangChain4j @Tool）', P.domain);
   const tools = [
-    ['DatabaseHealthCheckTool', '健康指标'],
     ['DatabaseMetricsTool', '性能指标'],
     ['SlowQueryTool', '慢查询'],
     ['SqlExecutionPlanTool', '执行计划'],
     ['EmailAlertTool', '邮件告警'],
     ['WeatherTool', '天气示例'],
   ];
-  const tw = 196, tgap = 14;
+  /* 工具数变化时按同一行宽自动均分，避免右侧留空 */
+  const tgap = 14, tspan = 1246, tw = (tspan - (tools.length - 1) * tgap) / tools.length;
   for (let i = 0; i < tools.length; i++) {
     b += box(50 + i * (tw + tgap), l4.y + 240, tw, 52, tools[i][0], tools[i][1], P.domain, 13, 11.5);
   }

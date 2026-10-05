@@ -423,7 +423,7 @@ Output:
 
 User:
 
-rag库 现在很卡，帮我看看是谁在锁表
+localhost:5432/rag_db 现在很卡，帮我看看是谁在锁表
 
 Output:
 
@@ -471,7 +471,7 @@ Output:
 
 User:
 
-rag库 现在有几个活跃会话？锁等待有几个？
+localhost:5432/rag_db 现在有几个活跃会话？锁等待有几个？
 
 Output:
 
@@ -489,7 +489,7 @@ Output:
 
 User:
 
-rag库 卡在哪里了，帮我看看是哪个会话挡住别人
+localhost:5432/rag_db 卡在哪里了，帮我看看是哪个会话挡住别人
 
 Output:
 

@@ -17,6 +17,23 @@ JUDGE_ENABLED = os.environ.get("AGENT_EVAL_JUDGE", "1").lower() not in ("0", "fa
 TIMEOUT_SECONDS = int(os.environ.get("AGENT_EVAL_TIMEOUT", "180"))
 REPORT_DIR = os.environ.get("AGENT_EVAL_REPORT_DIR", "reports")
 
+TOOL_DATASET = os.environ.get("AGENT_EVAL_TOOL_DATASET", "datasets/tool_cases_v1.jsonl")
+TOOL_DATASET_VERSION = os.environ.get("AGENT_EVAL_TOOL_DATASET_VERSION", "tool_v1_20260926")
+TOOL_SUITE_NAME = os.environ.get("AGENT_EVAL_TOOL_SUITE", "TOOL")
+TOOL_REPORT_DIR = os.environ.get("AGENT_EVAL_TOOL_REPORT_DIR", "reports/tool")
+
+RAG_DATASET = os.environ.get("AGENT_EVAL_RAG_DATASET", "datasets/rag_cases_v1.jsonl")
+RAG_DATASET_VERSION = os.environ.get("AGENT_EVAL_RAG_DATASET_VERSION", "rag_v1_20260926_qg1")
+RAG_SUITE_NAME = os.environ.get("AGENT_EVAL_RAG_SUITE", "RAG")
+RAG_REPORT_DIR = os.environ.get("AGENT_EVAL_RAG_REPORT_DIR", "reports/rag")
+
+KB_SNAPSHOT = os.environ.get("AGENT_EVAL_KB_SNAPSHOT", "datasets/kb_chunks_snapshot.jsonl")
+KB_DOC_PAGE_SIZE = int(os.environ.get("AGENT_EVAL_KB_DOC_PAGE_SIZE", "100"))
+KB_CHUNK_PAGE_SIZE = int(os.environ.get("AGENT_EVAL_KB_CHUNK_PAGE_SIZE", "200"))
+
+RAG_TOPK = int(os.environ.get("AGENT_EVAL_RAG_TOPK", "50"))
+RAG_RERANK = os.environ.get("AGENT_EVAL_RAG_RERANK", "1").lower() not in ("0", "false", "no")
+
 
 def require_credentials():
     missing = [name for name, value in (("AGENT_USERNAME", USERNAME), ("AGENT_PASSWORD", PASSWORD)) if not value]

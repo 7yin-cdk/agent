@@ -29,31 +29,26 @@ import java.sql.ResultSet;
 @RequiredArgsConstructor
 public class ReplicationDiagnosisTool extends AbstractPostgresTool {
 
-    private final InstanceResolver instanceResolver;
-
     /**
      * 获取复制状态与 WAL 槽位保留情况。
      *
-     * @param instance 数据库实例地址 host:port，或巡检配置中的业务名
-     * @param database 数据库名称；使用业务名时可省略
+     * @param instance 数据库实例地址，须形如 host:port
+     * @param database 数据库名称
      * @return 主备状态、各从库延迟明细、槽位保留字节数的 JSON
      */
     @Tool("获取指定数据库的复制状态：自动区分主库/备库，主库返回每台从库的连接状态、同步模式、四个 LSN 位置与两两差值、write/flush/replay 延迟秒数，备库返回接收与重放 LSN 差值和重放延迟时长；同时返回复制槽列表、各槽位保留的 WAL 字节数与非活跃槽位数，用于排查复制延迟与 WAL 堆积")
     public String getReplicationStatus(
-            @P("数据库实例地址 host:port，或巡检配置中的业务名（如 rag库）") String instance,
-            @P(required = false, value = "数据库名称；使用业务名时可省略，默认取该实例配置的库名") String database) {
+            @P("数据库实例地址，格式为 host:port，例如 localhost:5432") String instance,
+            @P("数据库名称") String database) {
 
-        InstanceResolver.ResolvedTarget target = instanceResolver.resolve(instance, database);
-        if (target == null) {
-            return errorJson("无法解析数据库实例: " + instance
-                    + "。请提供 host:port 形式的地址（如 localhost:5432），或 agent.healthcheck.targets "
-                    + "中已定义的业务名（如 rag库）；仅当使用业务名时可省略 database 参数");
+        String paramError = validateTarget(instance, database);
+        if (paramError != null) {
+            return paramError;
         }
 
-        return executeWithRetry(target.hostPort(), target.database(), "复制状态采集失败", conn -> {
+        return executeWithRetry(instance, database, "复制状态采集失败", conn -> {
 
-            ObjectNode result = baseResult(instance, target.database());
-            result.put("resolvedInstance", target.hostPort());
+            ObjectNode result = baseResult(instance, database);
 
             boolean inRecovery = queryInRecovery(conn);
             result.put("role", inRecovery ? "standby" : "primary");

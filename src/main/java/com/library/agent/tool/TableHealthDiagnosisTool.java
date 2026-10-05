@@ -30,34 +30,31 @@ import java.sql.ResultSet;
 @RequiredArgsConstructor
 public class TableHealthDiagnosisTool extends AbstractPostgresTool {
 
-    private final InstanceResolver instanceResolver;
-
     /**
      * 获取死元组与 VACUUM 状态，附带卡住清理水位的事务证据。
      * <p>
      * 主列表按死元组绝对条数降序而非死元组比例降序：比例会让只有两三行的小表
      * （如评测运行表）以极高比例挤掉真正需要清理的大表，绝对值更能反映清理收益。
      *
-     * @param instance 数据库实例地址 host:port，或巡检配置中的业务名
-     * @param database 数据库名称；使用业务名时可省略
+     * @param instance 数据库实例地址，须形如 host:port
+     * @param database 数据库名称
      * @return 死元组明细、最旧 xmin 持有者、最长事务的 JSON
      */
     @Tool("获取指定数据库中死元组最多的表明细（表名、活/死元组数、死元组比例、最近 vacuum/autovacuum/analyze 时间、autovacuum 次数、表体积），并附带持有最旧 backend_xmin 的会话与运行时间最长的事务，用于判断表膨胀是由长事务/旧快照卡住清理水位、还是写入量超过 autovacuum 清理能力，或自动清理即将追上")
     public String getVacuumAndBloatStatus(
-            @P("数据库实例地址 host:port，或巡检配置中的业务名（如 rag库）") String instance,
-            @P(required = false, value = "数据库名称；使用业务名时可省略，默认取该实例配置的库名") String database) {
+            @P("数据库实例地址，格式为 host:port，例如 localhost:5432") String instance,
+            @P("数据库名称") String database) {
 
-        InstanceResolver.ResolvedTarget target = instanceResolver.resolve(instance, database);
-        if (target == null) {
-            return resolveError(instance);
+        String paramError = validateTarget(instance, database);
+        if (paramError != null) {
+            return paramError;
         }
 
-        return executeWithRetry(target.hostPort(), target.database(), "表膨胀状态采集失败", conn -> {
+        return executeWithRetry(instance, database, "表膨胀状态采集失败", conn -> {
 
-            ObjectNode result = baseResult(instance, target.database());
-            result.put("resolvedInstance", target.hostPort());
+            ObjectNode result = baseResult(instance, database);
 
-            collectDeadTuples(conn, target.database(), result);
+            collectDeadTuples(conn, database, result);
             collectOldestXminHolder(conn, result);
             collectLongestTransactions(conn, result);
 
@@ -71,24 +68,23 @@ public class TableHealthDiagnosisTool extends AbstractPostgresTool {
      * 两张子表口径保持一致的"热表"定义（seq_scan 降序、其次活元组数降序），
      * 便于把"这张表在被全表扫描"与"这张表的这个索引从未被用过"对应起来。
      *
-     * @param instance 数据库实例地址 host:port，或巡检配置中的业务名
-     * @param database 数据库名称；使用业务名时可省略
+     * @param instance 数据库实例地址，须形如 host:port
+     * @param database 数据库名称
      * @return 表访问统计与未使用索引的 JSON
      */
     @Tool("获取指定数据库中被顺序扫描最多的表（表名、顺序扫描次数与读取元组数、索引扫描次数与回表元组数、增删改计数、活元组数、表体积、索引使用率百分比），以及这些热表上扫描次数为 0 的未使用索引（索引名、扫描次数、索引体积），用于定位缺失索引或冗余索引")
     public String getTableAccessStats(
-            @P("数据库实例地址 host:port，或巡检配置中的业务名（如 rag库）") String instance,
-            @P(required = false, value = "数据库名称；使用业务名时可省略，默认取该实例配置的库名") String database) {
+            @P("数据库实例地址，格式为 host:port，例如 localhost:5432") String instance,
+            @P("数据库名称") String database) {
 
-        InstanceResolver.ResolvedTarget target = instanceResolver.resolve(instance, database);
-        if (target == null) {
-            return resolveError(instance);
+        String paramError = validateTarget(instance, database);
+        if (paramError != null) {
+            return paramError;
         }
 
-        return executeWithRetry(target.hostPort(), target.database(), "表访问统计采集失败", conn -> {
+        return executeWithRetry(instance, database, "表访问统计采集失败", conn -> {
 
-            ObjectNode result = baseResult(instance, target.database());
-            result.put("resolvedInstance", target.hostPort());
+            ObjectNode result = baseResult(instance, database);
 
             collectTableAccess(conn, result);
             collectUnusedIndexes(conn, result);
@@ -294,14 +290,5 @@ public class TableHealthDiagnosisTool extends AbstractPostgresTool {
         }
 
         result.set("unusedIndexes", indexes);
-    }
-
-    /**
-     * 统一的实例解析失败提示。
-     */
-    private String resolveError(String instance) {
-        return errorJson("无法解析数据库实例: " + instance
-                + "。请提供 host:port 形式的地址（如 localhost:5432），或 agent.healthcheck.targets "
-                + "中已定义的业务名（如 rag库）；仅当使用业务名时可省略 database 参数");
     }
 }

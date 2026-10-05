@@ -29,6 +29,11 @@ public class EvalCaseResultRequest {
     private String difficulty;
 
     /**
+     * 意图识别观测值：KNOWLEDGE_BASE / COMPLEX_TASK（取自 trace）
+     */
+    private String intentType;
+
+    /**
      * 用户输入原文
      */
     private String query;

@@ -10,6 +10,8 @@ import com.library.agent.eval.dto.EvalRunCreateRequest;
 import com.library.agent.eval.dto.EvalRunView;
 import com.library.agent.eval.service.EvalJudgeService;
 import com.library.agent.eval.service.EvalService;
+import com.library.agent.llm.ToolCallingService;
+import com.library.agent.llm.ToolSchemaView;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,6 +39,7 @@ public class EvalController {
 
     private final EvalService evalService;
     private final EvalJudgeService evalJudgeService;
+    private final ToolCallingService toolCallingService;
 
     /**
      * 创建测评批次。
@@ -94,6 +97,17 @@ public class EvalController {
     public Map<String, Object> judgeVersion() {
         requireUserId();
         return Map.of("rubricVersion", EvalJudgeService.RUBRIC_VERSION);
+    }
+
+    /**
+     * 导出已注册工具的 schema（名称、访问类型、参数名与类型、是否必填）。
+     * <p>
+     * 工具调用测评用它做参数类型与必填校验，避免在评测脚本里再维护一份工具参数清单。
+     */
+    @GetMapping("/tools/schema")
+    public List<ToolSchemaView> toolSchema() {
+        requireUserId();
+        return toolCallingService.describeRegisteredTools();
     }
 
     private Long requireUserId() {

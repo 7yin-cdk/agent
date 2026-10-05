@@ -35,11 +35,9 @@ public class SlowQueryTool extends AbstractPostgresTool {
             @P("数据库实例地址，格式为 host:port，例如 192.168.1.100:5432") String instance,
             @P("数据库名称") String database) {
 
-        if (instance == null || instance.isBlank()) {
-            return errorJson("数据库实例地址不能为空");
-        }
-        if (database == null || database.isBlank()) {
-            return errorJson("数据库名称不能为空");
+        String paramError = validateTarget(instance, database);
+        if (paramError != null) {
+            return paramError;
         }
 
         return executeWithRetry(instance, database, "慢查询采集失败", conn -> {
@@ -139,11 +137,9 @@ public class SlowQueryTool extends AbstractPostgresTool {
             @P("数据库实例地址，格式为 host:port") String instance,
             @P("数据库名称") String database) {
 
-        if (instance == null || instance.isBlank()) {
-            return errorJson("数据库实例地址不能为空");
-        }
-        if (database == null || database.isBlank()) {
-            return errorJson("数据库名称不能为空");
+        String paramError = validateTarget(instance, database);
+        if (paramError != null) {
+            return paramError;
         }
 
         return executeWithRetry(instance, database, "重置统计数据失败", conn -> {

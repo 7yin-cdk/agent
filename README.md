@@ -211,7 +211,6 @@ Agent 在 ReAct 循环中通过 LangChain4j `@Tool` 调用以下工具：
 
 | 工具 | 说明 |
 | --- | --- |
-| `DatabaseHealthCheckTool` | 获取指定数据库实例的实时健康指标（活跃会话、缓冲池命中率、锁等待、死元组比例等） |
 | `DatabaseMetricsTool` | 数据库性能指标查询 |
 | `SlowQueryTool` | 慢查询分析 |
 | `SqlExecutionPlanTool` | SQL 执行计划分析 |

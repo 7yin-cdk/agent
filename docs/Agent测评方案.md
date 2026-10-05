@@ -90,42 +90,42 @@
 | 测试集 | 建议规模 | 说明 |
 | --- | --- | --- |
 | 整体测评 `chat_cases` | ≥ 80 条 | 含知识问答、诊断、告警、纯闲聊/越界；当前 `chat_cases_v3.jsonl` 为 123 条 |
-| 工具调用 `tool_cases` | ≥ 100 条 | 12 个数据库工具 × 正例/硬负例/多工具/参数缺失 |
-| RAG `rag_cases` | ≥ 100 条 | BEIR SciFact 全量 + 自建中文运维集 ≥ 50 条 |
+| 工具调用 `tool_cases` | ≥ 70 条 | 11 个数据库工具 × 正例/硬负例/多工具/参数缺失；当前 `tool_cases_v1.jsonl` 为 72 条（告警邮件发送组整体排除，见第六节） |
+| RAG `rag_cases` | ≥ 120 条 | 自建中文运维语料，从 chunk 反向生成 query 并人工复核；不做 BEIR SciFact |
 
 ### 3.3 工具调用用例模板（示例）
 
 ```json
-{"case_id":"tool_001","category":"single_tool","query":"帮我采集一下 192.168.1.100:5432 上 rag_db 的性能指标","expected_tools":["采集PostgreSQL数据库实例的八项核心性能指标：活跃会话数、缓冲池命中率、锁等待会话数、每秒事务数、主从复制延迟、死元组比例、后端写入缓冲区占比、事务空闲未关闭连接数"],"expected_params":{"collectDatabaseMetrics":{"instance":"192.168.1.100:5432","database":"rag_db"}},"difficulty":"easy"}
-{"case_id":"tool_042","category":"multi_tool","query":"诊断下 rag 库，看健康指标和慢查询，有问题就发告警","expected_tools":["获取指定数据库实例的实时健康指标，返回各指标原始数值，供判断数据库是否异常。注意：该工具只返回数据，不包含异常判定结论","查询数据库中平均执行时间最长的Top 10慢查询，基于pg_stat_statements扩展，返回查询文本、执行次数、各维度耗时及缓冲区命中率等关键信息"],"optional_tools":["向指定数据库实例的预配置告警联系人发送告警邮件，收件人由配置决定。邮件正文需包含异常指标、当前值、阈值与优化建议"],"difficulty":"hard","order_sensitive":false}
+{"case_id":"tool_001","category":"single_tool","query":"帮我采集一下 192.168.1.100:5432 上 rag_db 的性能指标","expected_tools":["collectDatabaseMetrics"],"expected_params":{"collectDatabaseMetrics":{"instance":"192.168.1.100:5432","database":"rag_db"}},"difficulty":"easy"}
+{"case_id":"tool_042","category":"multi_tool","query":"诊断下 localhost:5432 上的 rag_db，看健康指标和慢查询，有问题就发告警","expected_tools":["collectDatabaseMetrics","getTopSlowQueries"],"optional_tools":["sendAlertEmail"],"difficulty":"hard","order_sensitive":false}
 {"case_id":"tool_071","category":"hard_negative","query":"慢查询一般是怎么产生的？给我讲讲原理","expected_tools":[],"difficulty":"medium","notes":"纯知识问答，不应调用任何工具"}
-{"case_id":"tool_088","category":"param_missing","query":"帮我查一下慢查询","expected_params":{"getTopSlowQueries":{"instance":"__ASK_USER__"}},"difficulty":"hard","notes":"instance 缺失，应追问而非编造"}
+{"case_id":"tool_088","category":"param_missing","query":"帮我查一下慢查询","expected_params":{"getTopSlowQueries":{"instance":"__ASK__"}},"difficulty":"hard","notes":"instance 缺失，应追问而非编造"}
 ```
 
-> 工具 `name` 当前为 `@Tool` 注解的整句描述（LangChain4j 约定），比对时建议用**整句精确匹配**，同时在 harness 中维护「整句 ↔ 短名」映射表便于报告阅读。
+> 工具 `name` 取 **Java 方法名**（`getBlockingChains`、`collectDatabaseMetrics` 这种），不是 `@Tool` 注解里的整句描述。
+> `ToolCallingServiceImpl` 注册与调用时用的都是 `specification.name()`，即方法名；比对时**精确匹配、不做模糊匹配**
+> （模糊匹配会把真实幻觉工具名掩盖成"近似命中"）。
 
 **`db_diagnosis` 诊断组用例要点**
 
 已在 `chat_cases_v3.jsonl` 落地 30 条（`diag_001`–`diag_030`）：
-单工具正例 13 条（6 个工具各自覆盖，`instance` 覆盖业务名与 `host:port` 两种写法）、
+单工具正例 13 条（6 个工具各自覆盖，`instance` 一律取 `host:port`）、
 链式下钻 8 条、参数缺失/实例不可达 4 条、写操作边界 4 条。
 
 除单工具正例外，该组需要专门覆盖**链式下钻**（ReAct 多步：先用总览类工具定位方向，再用专项工具取证据）：
 
 ```json
-{"case_id":"tool_101","category":"chained_drilldown","query":"rag库 现在很卡，帮我看看是谁在锁表","expected_tools":["获取指定数据库当前的锁阻塞关系（阻塞方 pid/用户/应用/状态/事务已开启时长/backend_xmin/正在执行的 SQL、持有锁的模式与对象、是否链源头，以及等待方 pid/用户/状态/已等待时长/正在执行的 SQL、被该阻塞方挡住的会话数），用于定位锁等待的根因会话与长事务"],"expected_param_sources":{"getBlockingChains":{"instance":"EXPLICIT_CURRENT"}},"difficulty":"hard","notes":"业务名场景；instance 逐字出现在用户原话中"}
+{"case_id":"tool_101","category":"chained_drilldown","query":"localhost:5432/rag_db 现在很卡，帮我看看是谁在锁表","expected_tools":["getBlockingChains"],"expected_param_sources":{"getBlockingChains":{"instance":["EXPLICIT_CURRENT"]}},"difficulty":"hard","notes":"instance 与 database 都逐字出现在用户原话中"}
 {"case_id":"tool_102","category":"hard_negative","query":"你好，今天天气怎么样","expected_tools":[],"difficulty":"easy","notes":"不应误触发任何下钻工具"}
 ```
 
 断言要点的口径（**不要断言来源必须是 `TOOL_OUTPUT`**）：
 
 - 后续步骤的 `argument_sources` 取值随参数值的来处而定：值逐字出现在用户原话里 → `EXPLICIT_CURRENT`
-  （`tool_101` 的 `instance=rag库` 即属此类，实测模型也是这么标的）；值来自上一步工具返回结果 → `TOOL_OUTPUT`。
+  （`tool_101` 的 `instance=localhost:5432` 即属此类，实测模型也是这么标的）；值来自上一步工具返回结果 → `TOOL_OUTPUT`。
 - 共同断言是**不得出现向用户追问实例/库名的澄清**，以及后续步骤确实调用了下钻工具。
-- 当前 6 个下钻工具的必填参数只有 `instance`，`database` 为可选（业务名场景自动回填）。
-  因此"值不在原话里"的真实窗口只有两种：模型在后续步骤显式带上取自上一步输出的 `database`，
-  或模型改用上一步回显的 `host:port` 形式调用。两者都由模型自主选择，端到端**不保证**出现
-  `TOOL_OUTPUT`——`TOOL_OUTPUT` 的放行/拒绝语义由 `ToolCallGuardTest` 与
+- 6 个下钻工具的必填参数是 `instance` 与 `database`，两者通常都能在用户原话里找到，
+  端到端**不保证**出现 `TOOL_OUTPUT`——该来源的放行/拒绝语义由 `ToolCallGuardTest` 与
   `ToolCallingServiceGroundingTest` 的确定性单测覆盖，链路级用例只做"不追问 + 真调用"的弱断言。
 
 **`key_points` 必须写成条件式（被测库是安静库）**
@@ -506,23 +506,22 @@ CREATE INDEX idx_eval_case_run ON agent_eval_case_result(run_id, case_id);
 
 ### 9.1 工具与期望参数速查（用于构建 `tool_cases`）
 
-| 工具（`@Tool` 简称） | 参数 | 类型 | WRITE |
+| 工具（Java 方法名，即比对用的 `expected_tools` 取值） | 参数 | 类型 | WRITE |
 | --- | --- | --- | --- |
-| `checkDatabaseHealth` | `instanceName` | 业务名（如"rag库"） | 否 |
 | `collectDatabaseMetrics` | `instance`, `database` | `host:port`, 库名 | 否 |
 | `getTopSlowQueries` | `instance`, `database` | `host:port`, 库名 | 否 |
 | `resetSlowQueryStats` | `instance`, `database` | `host:port`, 库名 | **是** |
 | `getSqlExecutionPlan` | `instance`, `database`, `sql`, `mode` | `host:port`, 库名, SQL 文本, `estimated\|actual` | 否 |
 | `sendAlertEmail` | `instanceName`, `runId`, `subject`, `content` | 业务名, 运行ID, 主题, 正文 | **是** |
 | `getWeather` | `city` | 城市名 | 否 |
-| `listActiveSessions` | `instance`, `database`(选) | 业务名或 `host:port`, 库名 | 否 |
-| `getWaitEventDistribution` | `instance`, `database`(选) | 业务名或 `host:port`, 库名 | 否 |
-| `getBlockingChains` | `instance`, `database`(选) | 业务名或 `host:port`, 库名 | 否 |
-| `getReplicationStatus` | `instance`, `database`(选) | 业务名或 `host:port`, 库名 | 否 |
-| `getVacuumAndBloatStatus` | `instance`, `database`(选) | 业务名或 `host:port`, 库名 | 否 |
-| `getTableAccessStats` | `instance`, `database`(选) | 业务名或 `host:port`, 库名 | 否 |
+| `listActiveSessions` | `instance`, `database` | `host:port`, 库名 | 否 |
+| `getWaitEventDistribution` | `instance`, `database` | `host:port`, 库名 | 否 |
+| `getBlockingChains` | `instance`, `database` | `host:port`, 库名 | 否 |
+| `getReplicationStatus` | `instance`, `database` | `host:port`, 库名 | 否 |
+| `getVacuumAndBloatStatus` | `instance`, `database` | `host:port`, 库名 | 否 |
+| `getTableAccessStats` | `instance`, `database` | `host:port`, 库名 | 否 |
 
-> 表末 6 行为 `db_diagnosis` 任务的下钻工具，全部**只读**。`instance` 同时接受巡检配置中的业务名（如 `rag库`）与 `host:port` 字面地址：用业务名时可省略 `database`（自动回填该实例配置的库名），用 `host:port` 时 `database` 必填。多步下钻时后续步骤的 `instance`/`database` 直接复用上一步的值，无需用户重复提供；`argument_sources` 按**值的实际来处**标注——值逐字在用户本轮原话里 → `EXPLICIT_CURRENT`，值取自本轮此前成功的工具返回结果 → `TOOL_OUTPUT`。
+> 表末 6 行为 `db_diagnosis` 任务的下钻工具，全部**只读**。所有数据库诊断/指标工具的 `instance` 一律只接受 `host:port` 字面地址（不再接受巡检配置里的业务名，也不再自动补默认端口），`database` 必填。多步下钻时后续步骤的 `instance`/`database` 直接复用上一步的值，无需用户重复提供；`argument_sources` 按**值的实际来处**标注——值逐字在用户本轮原话里 → `EXPLICIT_CURRENT`，值取自本轮此前成功的工具返回结果 → `TOOL_OUTPUT`。唯一仍按业务名寻址的是写工具 `sendAlertEmail(instanceName=rag库)`，它只服务于定时巡检/告警链路。
 
 ### 9.2 指标速查表
 

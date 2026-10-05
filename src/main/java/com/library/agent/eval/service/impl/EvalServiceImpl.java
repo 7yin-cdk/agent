@@ -137,6 +137,8 @@ public class EvalServiceImpl implements EvalService {
                 cases.stream().map(EvalCaseResult::getToolCallCount).toList()));
         summary.put("byCategory", groupStats(cases, EvalCaseResult::getCategory));
         summary.put("byDifficulty", groupStats(cases, EvalCaseResult::getDifficulty));
+        /* 按意图识别观测值分层，用于区分「真识别」与「走关键词捷径/兜底」的用例分布 */
+        summary.put("byIntentType", groupStats(cases, EvalCaseResult::getIntentType));
         return summary;
     }
 
@@ -201,6 +203,7 @@ public class EvalServiceImpl implements EvalService {
         entity.setCaseId(request.getCaseId().trim());
         entity.setCategory(request.getCategory());
         entity.setDifficulty(request.getDifficulty());
+        entity.setIntentType(request.getIntentType());
         entity.setQuery(request.getQuery());
         entity.setTraceId(request.getTraceId());
         entity.setTaskSuccess(request.getTaskSuccess());
