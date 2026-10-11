@@ -15,7 +15,8 @@
 - **混合检索与重排序**：向量检索 + 关键词检索 + RRF 融合 + 重排序，优化召回质量。
 - **健康巡检**：定时由代码预取指标并完成阈值判定，LLM 据此定位异常根因并邮件告警，代码再按指标兜底补发漏报项，全程留痕可查。
 - **全链路可观测性**：记录每次会话的 Trace、LLM 调用、工具调用明细与统计汇总。
-- **检索评测**：内置 BEIR SciFact 数据集导入与检索评测接口，用于验证召回效果。
+- **三段式 Agent 测评**：按意图识别结果拆分意图 / 工具调用 / RAG 检索三条独立测评线，规则指标 + LLM-as-Judge 打分，配套 Python 套件生成并校验数据集、计算指标、产出报告，持续量化 TSR、工具选择 P/R/F1、参数正确率、召回率等。
+- **检索评测（BEIR SciFact）**：内置 BEIR SciFact 数据集导入与检索评测接口，用于验证召回链路。
 - **前端单页控制台**：聊天、知识库管理、长期记忆管理、可观测性、健康巡检等页面一体化。
 
 ## 技术栈
@@ -41,8 +42,10 @@
 ```
 src/main/java/com/library/agent
 ├── AgentApplication.java            # 启动类
+├── agent_eval/                      # 三段式测评 Python 套件（数据集生成/校验、指标引擎、报告）
 ├── auth/                            # 登录鉴权（注册/登录/Token/用户上下文）
 ├── beir/                            # BEIR SciFact 检索评测（导入/检索）
+├── beir_scifact_eval/               # BEIR SciFact 检索测评 Python 脚本
 ├── config/                          # 配置类（MinIO、LangChain4j、LTM、静态资源、健康检查）
 ├── context/                         # Agent 聊天上下文
 ├── controller/                      # 对外接口（聊天/流式、RAG、健康巡检）
@@ -51,6 +54,7 @@ src/main/java/com/library/agent
 ├── entity/                          # 数据库实体（含 AgentLongTermMemory）
 ├── enums/                           # 意图枚举、记忆类别枚举
 ├── es/                              # Elasticsearch 关键词检索
+├── eval/                            # Agent 测评接口（批次/用例落库、LLM Judge、工具 schema、RAG 检索测评）
 ├── handler/                         # MyBatis 类型处理器（String 数组、timestamptz、向量）
 ├── healthcheck/                     # 健康巡检（指标采集/异常判定/邮件通知）
 ├── llm/                             # 大模型调用（意图识别/查询改写/工具调用）
@@ -170,7 +174,7 @@ agent-ui/
 | DELETE | `/agent/memories/{id}` | 删除单条记忆 |
 | DELETE | `/agent/memories?category=xxx` | 按分类删除（缺省清除当前用户全部长期记忆） |
 
-> 记忆类别：`USER_PROFILE`（用户画像）/ `PREFERENCE`（偏好）/ `CONSTRAINT`（约束）/ `ENTITY`（实体知识）/ `EXPERIENCE`（经验案例）。前两者需在聊天中显式"记住"或达到轮次门槛后由 LLM 抽取；回答前执行 always-on + 实体等值 + 向量多路召回，经 RRF 融合与 rerank 后注入 prompt；按用户容量上限淘汰、每日定时清扫过期行。
+> 记忆类别：`USER_PROFILE`（用户画像）/ `PREFERENCE`（偏好）/ `CONSTRAINT`（约束）/ `ENTITY`（实体知识）/ `EXPERIENCE`（经验案例）。前两者需在聊天中显式"记住"或达到轮次门槛后由 LLM 抽取；回答前执行 always-on + 实体等值 + 向量多路召回，经 RRF 融合与 rerank 后注入 prompt；写入时按用户容量上限淘汰（实体看召回频率、经验看最近使用，均与入库时间加权，权重由 `agent.ltm.eviction.usage-weight` 配置），每日定时清扫过期行。
 
 ### 知识库（KB）
 | 方法 | 路径 | 说明 |
@@ -194,6 +198,23 @@ agent-ui/
 | GET | `/agent/observability/traces/{traceId}` | Trace 详情（含 LLM / 工具调用记录） |
 | GET | `/agent/observability/stats` | 汇总统计 |
 
+### Agent 测评
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| POST | `/eval/runs` | 创建测评批次 |
+| POST | `/eval/runs/{runId}/cases` | 批量写入批次用例结果 |
+| POST | `/eval/runs/{runId}/finish` | 批次收尾，计算并落库汇总指标 |
+| GET | `/eval/runs/{runId}` | 查询批次汇总与全部用例结果 |
+| POST | `/eval/judge` | 单条回答质量打分（LLM-as-Judge） |
+| GET | `/eval/judge/version` | 查询当前生效的 Judge rubric 版本 |
+| GET | `/eval/tools/schema` | 导出已注册工具 schema（名称/参数类型/是否必填） |
+| POST | `/eval/rag/retrieve` | 单条 RAG 检索测评（返回各阶段有序 chunkId） |
+| POST | `/eval/rag/retrieve-batch` | 批量 RAG 检索测评 |
+| POST | `/eval/rag/gen-query` | 由文档片段反向生成候选测试 query |
+| GET | `/eval/rag/gen-query/version` | 查询当前生效的出题提示词版本 |
+
+> 测评数据不分用户（面向内部的质量工具），但接口仍需登录。用例级的 Token 与耗时由脚本从 `/agent/observability/traces/{traceId}` 采集后随用例结果上报。使用方式见 `src/main/java/com/library/agent/agent_eval/README.md`，指标口径见 `docs/Agent测评方案.md`。
+
 ### 检索评测（BEIR SciFact）
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
@@ -211,11 +232,17 @@ Agent 在 ReAct 循环中通过 LangChain4j `@Tool` 调用以下工具：
 
 | 工具 | 说明 |
 | --- | --- |
-| `DatabaseMetricsTool` | 数据库性能指标查询 |
-| `SlowQueryTool` | 慢查询分析 |
-| `SqlExecutionPlanTool` | SQL 执行计划分析 |
-| `EmailAlertTool` | 邮件告警通知 |
+| `DatabaseMetricsTool` | 数据库性能指标查询（活跃会话、缓冲池命中率、锁等待、事务速率、主从延迟、死元组比例等八项核心指标） |
+| `SlowQueryTool` | 慢查询分析（Top 10 慢查询；另含重置统计的写操作） |
+| `SqlExecutionPlanTool` | SQL 执行计划分析（估算 / 实际两种模式） |
+| `SessionDiagnosisTool` | 会话诊断（非空闲会话明细、按等待事件类型的分布） |
+| `LockBlockingTool` | 锁阻塞链诊断（阻塞方/等待方关系、长事务与锁等待源头） |
+| `ReplicationDiagnosisTool` | 主从复制状态诊断（主备 LSN 差值、延迟、复制槽 WAL 保留与非活跃槽位） |
+| `TableHealthDiagnosisTool` | 表健康诊断（死元组/膨胀、vacuum 情况、表访问统计与未使用索引） |
+| `EmailAlertTool` | 邮件告警通知（写操作） |
 | `WeatherTool` | 天气查询（示例/演示工具） |
+
+> 说明：`SessionDiagnosisTool` / `LockBlockingTool` / `ReplicationDiagnosisTool` / `TableHealthDiagnosisTool` 为 `db_diagnosis` 任务的下钻工具，全部只读。
 
 ## 提示词工程
 
@@ -226,7 +253,8 @@ Agent 在 ReAct 循环中通过 LangChain4j `@Tool` 调用以下工具：
 - `RoutePrompt.md` —— 意图路由
 - `OutputRulesPrompt.md` —— 输出规则
 - `CurrentConversationStatePrompt.md` —— 会话状态
-- `task/` —— 各工具的任务模板（数据库指标、慢查询、执行计划、天气等）
+- `task/` —— 各任务的任务模板（数据库指标、数据库诊断下钻、慢查询、执行计划、天气）
+- `eval/` —— 测评提示词（`JudgeRubricPrompt.md` 回答质量评分 rubric、`RagQueryGenPrompt.md` 检索测评出题）
 
 ## 开发规范
 
