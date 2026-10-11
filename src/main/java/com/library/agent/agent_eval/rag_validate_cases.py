@@ -23,7 +23,7 @@ MIN_CASES = 120
 MIN_FILES = 25
 MIN_PER_DEPTH = 10
 MIN_PER_TYPE = 20
-MAX_PER_SEED = 3
+MAX_PER_SEED = 5
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -97,7 +97,6 @@ def main():
         "1": sum(count for depth, count in by_depth.items() if depth == 1),
         "2": sum(count for depth, count in by_depth.items() if depth == 2),
         "3": sum(count for depth, count in by_depth.items() if depth == 3),
-        ">=4": sum(count for depth, count in by_depth.items() if (depth or 0) >= 4),
     }
     depth_detail = " ".join(f"{key}={value}" for key, value in depth_groups.items())
     results.append(

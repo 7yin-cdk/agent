@@ -30,6 +30,7 @@
 | `tool_cases_migration_map.md` | TOOL 数据集逐条「原 v3 notes → 结构化字段」迁移映射与口径修订记录 |
 | `export_kb_chunks.py` | RAG 语料快照导出（走 HTTP，登录后翻页拉文档与切片） |
 | `rag_gen_queries.py` | RAG 候选 query 生成（调 `/eval/rag/gen-query`，按 5 类各 1 条） |
+| `rag_freeze_cases.py` | RAG 数据集冻结：把复核后的草案统一置 `reviewed=true` 并写为 `rag_cases_v1.jsonl` |
 | `rag_validate_cases.py` | RAG 数据集校验器（覆盖矩阵、seed_chunk_id 可回溯） |
 | `rag_runner.py` | RAG 套件编排：批量调检索端点 → 算分层指标 → 生成报告 |
 | `rag_metrics.py` | RAG 指标引擎（纯 Python 自实现，无第三方依赖） |

@@ -14,6 +14,8 @@ public interface FileMetadataMapper {
 
     FileMetadata selectById(@Param("id") Long id);
 
+    FileMetadata selectByFileHash(@Param("fileHash") String fileHash);
+
     List<FileListVO> selectPage(
             @Param("keyword") String keyword,
             @Param("status") String status,

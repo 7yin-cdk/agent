@@ -52,18 +52,32 @@ def sample_seeds(rows):
         for row in rows
         if (row.get("chunk_text") or "").strip() and (row.get("section_path") or "").strip()
     ]
-    by_file = {}
-    for row in usable:
-        by_file.setdefault(row.get("file_name"), []).append(row)
 
     rng = random.Random(SEED)
-    for name in by_file:
-        rng.shuffle(by_file[name])
 
-    buckets = {"d1": [], "d2": [], "d3": [], "d4plus": []}
-    for name in sorted(by_file):
-        for row in by_file[name]:
-            buckets[depth_bucket(row.get("section_depth") or 0)].append(row)
+    by_bucket_file = {"d1": {}, "d2": {}, "d3": {}, "d4plus": {}}
+    for row in usable:
+        key = depth_bucket(row.get("section_depth") or 0)
+        name = row.get("file_name")
+        by_bucket_file[key].setdefault(name, []).append(row)
+    for by_file in by_bucket_file.values():
+        for name in by_file:
+            rng.shuffle(by_file[name])
+
+    buckets = {}
+    for key, by_file in by_bucket_file.items():
+        names = sorted(by_file)
+        rng.shuffle(names)
+        interleaved = []
+        while names:
+            advanced = []
+            for name in names:
+                pending = by_file[name]
+                if pending:
+                    interleaved.append(pending.pop(0))
+                    advanced.append(name)
+            names = advanced
+        buckets[key] = interleaved
 
     seeds = []
     seen = set()

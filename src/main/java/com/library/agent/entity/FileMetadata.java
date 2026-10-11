@@ -37,6 +37,11 @@ public class FileMetadata {
     private String contentType;
 
     /**
+     * 文件内容 SHA-256（十六进制），作为上传幂等判重的内容指纹
+     */
+    private String fileHash;
+
+    /**
      * MinIO桶名称
      */
     private String bucketName;

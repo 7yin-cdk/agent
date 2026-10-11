@@ -22,10 +22,15 @@ import io.minio.RemoveObjectArgs;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.io.InputStream;
+import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.function.Consumer;
@@ -64,9 +69,22 @@ public class RagServiceImpl implements RagService {
 
     /**
      * 上传文档：MinIO 存原文 → 写 file_metadata(UPLOADED) → 发异步入库消息。
+     * <p>
+     * 幂等判重：同一份文件内容（SHA-256 一致）只允许入库一次，重复上传直接拒绝，
+     * 避免同一文档在切片表、向量表和 ES 中产生重复数据。
      */
     @Override
     public FileMetadata uploadAndEnqueue(MultipartFile file) {
+        // 先算内容指纹再入库：以内容为准判重，不受文件名或上传次数影响
+        String fileHash = sha256Hex(file);
+
+        // 上传前先查一次，命中同内容文档则拒绝（正常情况下重复上传在此被拦下）
+        FileMetadata existing = fileMetadataMapper.selectByFileHash(fileHash);
+        if (existing != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "文档内容已存在，请勿重复上传（已有文档：" + existing.getFileName() + "）");
+        }
+
         try {
             String objectName = uploadToMinio(file);
             String fileUrl = bucketName + "/" + objectName;
@@ -76,6 +94,7 @@ public class RagServiceImpl implements RagService {
             metadata.setFileUrl(fileUrl);
             metadata.setFileSize(file.getSize());
             metadata.setContentType(file.getContentType());
+            metadata.setFileHash(fileHash);
             metadata.setBucketName(bucketName);
             metadata.setObjectName(objectName);
             metadata.setStatus("UPLOADED");
@@ -92,8 +111,29 @@ public class RagServiceImpl implements RagService {
             );
             ragIngestProducer.send(message);
             return metadata;
+        } catch (DuplicateKeyException e) {
+            // 并发场景下两个请求同时通过前置判重，由 file_metadata.file_hash 唯一索引兜底，
+            // 这里把数据库的重复键异常转成与前置判重一致的提示
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "文档内容已存在，请勿重复上传");
         } catch (Exception e) {
             throw new RuntimeException("RAG ingest 失败", e);
+        }
+    }
+
+    /**
+     * 计算文件内容的 SHA-256（十六进制小写），作为上传幂等判重的内容指纹。
+     */
+    private String sha256Hex(MultipartFile file) {
+        try (InputStream in = file.getInputStream()) {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) != -1) {
+                digest.update(buf, 0, n);
+            }
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (Exception e) {
+            throw new RuntimeException("计算文件 SHA-256 失败", e);
         }
     }
 

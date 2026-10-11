@@ -7,15 +7,22 @@
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO file_metadata
-        (file_name, file_url, file_size, content_type, bucket_name, object_name, status, created_at,updated_at)
+        (file_name, file_url, file_size, content_type, file_hash, bucket_name, object_name, status, created_at,updated_at)
         VALUES
-            (#{fileName}, #{fileUrl}, #{fileSize}, #{contentType}, #{bucketName}, #{objectName}, #{status}, now(), now())
+            (#{fileName}, #{fileUrl}, #{fileSize}, #{contentType}, #{fileHash}, #{bucketName}, #{objectName}, #{status}, now(), now())
     </insert>
 
     <select id="selectById" resultType="com.library.agent.entity.FileMetadata">
         SELECT id, file_name, file_url, file_size, content_type, bucket_name, object_name, status, created_at, updated_at
         FROM file_metadata
         WHERE id = #{id}
+    </select>
+
+    <select id="selectByFileHash" resultType="com.library.agent.entity.FileMetadata">
+        SELECT id, file_name, file_url, file_size, content_type, file_hash, bucket_name, object_name, status, created_at, updated_at
+        FROM file_metadata
+        WHERE file_hash = #{fileHash}
+        LIMIT 1
     </select>
 
     <select id="selectPage" resultType="com.library.agent.rag.dto.FileListVO">
